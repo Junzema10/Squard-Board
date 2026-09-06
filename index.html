@@ -293,10 +293,15 @@
   .balance-bad{ background:var(--critical-soft); color:var(--critical); }
   .reshuffle-row{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
   .team-total{ font-family:var(--font-mono); font-size:28px; font-weight:600; margin-bottom:8px; }
-  .roster-mini{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:5px; }
-  .roster-mini li{ display:flex; justify-content:space-between; font-size:13px; color:var(--text-2); }
-  .roster-mini li b{ color:var(--text-1); font-weight:600; }
-  .gk-star{ color:var(--gold); font-family:var(--font-mono); font-size:11px; margin-left:6px; }
+  /* roster list sized up ~120% over the original, with a sequential number on the left of each
+     name — reserved for the club's goal-triggered keeper rotation order (다음 기능) */
+  .roster-mini{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+  .roster-mini li{ display:flex; align-items:baseline; gap:8px; font-size:16px; color:var(--text-2); }
+  .roster-mini li .roster-num{
+    font-family:var(--font-mono); font-size:12px; color:var(--text-3); width:18px; flex:none; text-align:right;
+  }
+  .roster-mini li b{ color:var(--text-1); font-weight:600; flex:1; }
+  .roster-mini li .sc{ font-family:var(--font-mono); font-size:14px; color:var(--text-2); }
   .roster-mini li.reserve-li{ color:var(--text-3); font-style:italic; }
   .roster-mini li.reserve-li b{ color:var(--text-3); font-weight:600; }
 
@@ -326,17 +331,6 @@
   @media (prefers-reduced-motion:reduce){ .clock.critical{ animation:none; } }
   @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.55;} }
 
-  .gk-row{ display:flex; justify-content:center; gap:28px; margin:14px 0 22px; flex-wrap:wrap; }
-  .gk-chip{
-    display:flex; align-items:center; gap:8px; background:var(--bg-card); border:1px solid var(--line);
-    border-radius:999px; padding:8px 16px 8px 8px;
-  }
-  .gk-badge{
-    width:26px; height:26px; border-radius:50%; background:var(--gold-soft); color:var(--gold);
-    display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:11px; font-weight:700;
-  }
-  .gk-chip .t{ font-size:11px; color:var(--text-3); text-transform:uppercase; letter-spacing:0.04em; }
-  .gk-chip .n{ font-weight:700; }
 
   .alert-banner{
     display:none; align-items:center; justify-content:center; gap:10px; margin:0 auto 18px; max-width:480px;
@@ -356,7 +350,8 @@
   .roster-strip-card{ background:var(--bg-card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; text-align:left; }
   .roster-strip-card h4{ margin:0 0 8px; font-size:16px; font-family:var(--font-display); }
   .roster-strip-card ul{ list-style:none; margin:0; padding:0; font-size:13px; color:var(--text-2); display:flex; flex-direction:column; gap:4px; }
-  .roster-strip-card ul li.current-gk{ color:var(--gold); font-weight:700; }
+  .roster-strip-card ul li{ display:flex; align-items:baseline; gap:8px; }
+  .roster-strip-card ul li .roster-num{ font-family:var(--font-mono); font-size:11px; color:var(--text-3); width:16px; flex:none; text-align:right; }
   .roster-strip-card ul li.reserve-li{ color:var(--text-3); font-style:italic; }
 
   /* ---------- Public / shared-screen mode ---------- */
@@ -371,9 +366,6 @@
   }
   body.public-mode .clock{ font-size:min(26vw,300px); }
   body.public-mode .quarter-label{ font-size:22px; }
-  body.public-mode .gk-chip{ padding:14px 26px 14px 12px; }
-  body.public-mode .gk-badge{ width:38px; height:38px; font-size:15px; }
-  body.public-mode .gk-chip .n{ font-size:22px; }
   body.public-mode .alert-banner{ font-size:28px; padding:18px 30px; }
   body.public-mode .live-controls .btn:not(.exit-public){ display:none; }
 
@@ -508,14 +500,6 @@
             <input class="field-input" type="number" id="quarterCountInput" value="2" min="1" max="6">
           </div>
         </div>
-        <div class="card">
-          <div class="field" style="margin-bottom:0;">
-            <label>키퍼 교체 규칙</label>
-            <div style="font-family:var(--font-mono); font-size:13px; color:var(--text-2); padding-top:8px;">
-              쿼터 시작 <b style="color:var(--text-1)">7분</b> 경과 시 교체
-            </div>
-          </div>
-        </div>
       </div>
 
       <div class="mode-row">
@@ -527,8 +511,6 @@
         <div class="clock mono" id="clockDisplay">15:00</div>
 
         <div class="alert-banner" id="alertBanner"></div>
-
-        <div class="gk-row" id="gkRow"></div>
 
         <div class="live-controls">
           <button class="btn btn-sm" id="pauseBtn">일시정지</button>
@@ -556,7 +538,7 @@
   <div class="modal" id="noticeModal" style="max-width:420px;text-align:center;"></div>
 </div>
 
-<script id="stateData" type="application/json">{"members":[{"id":"m1","name":"이준영","position":"FW","stats":{"슈팅":7,"수비":5,"스피드":6,"드리블":7,"체력":5,"패스":8}},{"id":"m2","name":"전준모","position":"MF","stats":{"슈팅":6,"수비":7,"스피드":5,"드리블":8,"체력":6,"패스":7}},{"id":"m3","name":"안교형","position":"DF","stats":{"슈팅":7,"수비":4,"스피드":4,"드리블":8,"체력":4,"패스":7}},{"id":"m4","name":"홍광락","position":"FW","stats":{"슈팅":8,"수비":5,"스피드":7,"드리블":7,"체력":6,"패스":5}},{"id":"m5","name":"임정빈","position":"GK","stats":{"슈팅":4,"수비":3,"스피드":6,"드리블":4,"체력":6,"패스":3}},{"id":"m6","name":"김홍준","position":"DF","stats":{"슈팅":4,"수비":6,"스피드":5,"드리블":3,"체력":5,"패스":5}},{"id":"m7","name":"김춘추","position":"FW","stats":{"슈팅":4,"수비":6,"스피드":5,"드리블":6,"체력":5,"패스":4}},{"id":"m8","name":"마엘","position":"MF","stats":{"슈팅":7,"수비":6,"스피드":8,"드리블":7,"체력":6,"패스":5}},{"id":"m9","name":"박민우","position":"DF","stats":{"슈팅":7,"수비":6,"스피드":8,"드리블":6,"체력":7,"패스":6}},{"id":"m10","name":"서정화","position":"FW","stats":{"슈팅":7,"수비":6,"스피드":6,"드리블":7,"체력":6,"패스":6}},{"id":"m11","name":"서경동","position":"MF","stats":{"슈팅":6,"수비":7,"스피드":4,"드리블":5,"체력":6,"패스":5}},{"id":"m12","name":"정병수","position":"DF","stats":{"슈팅":4,"수비":6,"스피드":3,"드리블":4,"체력":8,"패스":3}},{"id":"m13","name":"채진경","position":"FW","stats":{"슈팅":9,"수비":6,"스피드":7,"드리블":8,"체력":6,"패스":7}},{"id":"m14","name":"장인희","position":"MF","stats":{"슈팅":7,"수비":5,"스피드":6,"드리블":7,"체력":5,"패스":5}},{"id":"m15","name":"김지섭","position":"GK","stats":{"슈팅":6,"수비":4,"스피드":4,"드리블":6,"체력":3,"패스":5}},{"id":"m16","name":"박재주","position":"FW","stats":{"슈팅":8,"수비":5,"스피드":6,"드리블":7,"체력":6,"패스":6}},{"id":"m17","name":"차상원","position":"MF","stats":{"슈팅":9,"수비":6,"스피드":7,"드리블":7,"체력":6,"패스":7}},{"id":"m18","name":"도솔","position":"DF","stats":{"슈팅":8,"수비":6,"스피드":6,"드리블":8,"체력":7,"패스":7}}],"attendance":{"m1":true,"m2":true,"m3":true,"m4":true,"m5":true,"m6":true,"m7":true,"m8":true,"m9":true,"m10":true,"m11":true,"m12":true,"m13":true,"m14":true,"m15":true,"m16":true,"m17":true,"m18":true},"teamCount":2,"teamSize":5,"teams":[{"name":"팀 A","memberIds":["m2","m4","m5","m8","m9","m12","m13","m16","m17"],"gkQueue":["m2","m4"]},{"name":"팀 B","memberIds":["m1","m3","m6","m7","m10","m11","m14","m15","m18"],"gkQueue":["m1","m3"]}],"adminMode":true,"showPositions":false,"squadView":"list","guests":[],"lastShortfall":0,"seedVersion":2}</script>
+<script id="stateData" type="application/json">{"members":[{"id":"m1","name":"이준영","position":"FW","stats":{"슈팅":7,"수비":5,"스피드":6,"드리블":7,"체력":5,"패스":8}},{"id":"m2","name":"전준모","position":"MF","stats":{"슈팅":6,"수비":7,"스피드":5,"드리블":8,"체력":6,"패스":7}},{"id":"m3","name":"안교형","position":"DF","stats":{"슈팅":7,"수비":4,"스피드":4,"드리블":8,"체력":4,"패스":7}},{"id":"m4","name":"홍광락","position":"FW","stats":{"슈팅":8,"수비":5,"스피드":7,"드리블":7,"체력":6,"패스":5}},{"id":"m5","name":"임정빈","position":"GK","stats":{"슈팅":4,"수비":3,"스피드":6,"드리블":4,"체력":6,"패스":3}},{"id":"m6","name":"김홍준","position":"DF","stats":{"슈팅":4,"수비":6,"스피드":5,"드리블":3,"체력":5,"패스":5}},{"id":"m7","name":"김춘추","position":"FW","stats":{"슈팅":4,"수비":6,"스피드":5,"드리블":6,"체력":5,"패스":4}},{"id":"m8","name":"마엘","position":"MF","stats":{"슈팅":7,"수비":6,"스피드":8,"드리블":7,"체력":6,"패스":5}},{"id":"m9","name":"박민우","position":"DF","stats":{"슈팅":7,"수비":6,"스피드":8,"드리블":6,"체력":7,"패스":6}},{"id":"m10","name":"서정화","position":"FW","stats":{"슈팅":7,"수비":6,"스피드":6,"드리블":7,"체력":6,"패스":6}},{"id":"m11","name":"서경동","position":"MF","stats":{"슈팅":6,"수비":7,"스피드":4,"드리블":5,"체력":6,"패스":5}},{"id":"m12","name":"정병수","position":"DF","stats":{"슈팅":4,"수비":6,"스피드":3,"드리블":4,"체력":8,"패스":3}},{"id":"m13","name":"채진경","position":"FW","stats":{"슈팅":9,"수비":6,"스피드":7,"드리블":8,"체력":6,"패스":7}},{"id":"m14","name":"장인희","position":"MF","stats":{"슈팅":7,"수비":5,"스피드":6,"드리블":7,"체력":5,"패스":5}},{"id":"m15","name":"김지섭","position":"GK","stats":{"슈팅":6,"수비":4,"스피드":4,"드리블":6,"체력":3,"패스":5}},{"id":"m16","name":"박재주","position":"FW","stats":{"슈팅":8,"수비":5,"스피드":6,"드리블":7,"체력":6,"패스":6}},{"id":"m17","name":"차상원","position":"MF","stats":{"슈팅":9,"수비":6,"스피드":7,"드리블":7,"체력":6,"패스":7}},{"id":"m18","name":"도솔","position":"DF","stats":{"슈팅":8,"수비":6,"스피드":6,"드리블":8,"체력":7,"패스":7}}],"attendance":{"m1":true,"m2":true,"m3":true,"m4":true,"m5":true,"m6":true,"m7":true,"m8":true,"m9":true,"m10":true,"m11":true,"m12":true,"m13":true,"m14":true,"m15":true,"m16":true,"m17":true,"m18":true},"teamCount":2,"teamSize":5,"teams":[{"name":"팀 A","memberIds":["m2","m4","m5","m8","m9","m12","m13","m16","m17"]},{"name":"팀 B","memberIds":["m1","m3","m6","m7","m10","m11","m14","m15","m18"]}],"adminMode":true,"showPositions":false,"squadView":"list","guests":[],"lastShortfall":0,"seedVersion":2}</script>
 <script id="mainScript">
 (function(){
   "use strict";
@@ -626,7 +608,7 @@
     attendance: {},   // id -> bool
     teamCount: 2,
     teamSize: 5,
-    teams: null,      // array of {name, memberIds, gkQueue}
+    teams: null,      // array of {name, memberIds}
     adminMode: false,
     showPositions: true,
     squadView: "card",
@@ -1149,13 +1131,6 @@
     }
     sorted.forEach(function(m, idx){ teams[order[idx]].memberIds.push(m.id); });
 
-    // goalkeeper rotation queue per team: first two REAL roster members (by draft order) rotate as GK —
-    // captured before padding with reserve slots below, since a reserve slot can't be a goalkeeper
-    teams.forEach(function(team){
-      team.gkQueue = team.memberIds.slice(0, Math.min(2, team.memberIds.length));
-      if(team.gkQueue.length === 1) team.gkQueue.push(team.gkQueue[0]);
-    });
-
     // pad each team up to the target team size with "지원" (reserve/idle-manpower) placeholder slots
     teams.forEach(function(team, ti){
       var missing = Math.max(0, size - team.memberIds.length);
@@ -1209,14 +1184,16 @@
       + '</div>';
 
     var cardsHtml = state.teams.map(function(team, i){
-      var rosterHtml = team.memberIds.map(function(id){
+      // sequential number on the left of each roster row — reserved for the club's goal-triggered
+      // keeper rotation order (다음 골 실점/득점 시 이 순서대로 키퍼 교체), not used for that yet
+      var rosterHtml = team.memberIds.map(function(id, idx){
+        var num = '<span class="roster-num">'+(idx+1)+'</span>';
         if(isReserve(id)){
-          return '<li class="reserve-li"><b>지원</b><span>모집중</span></li>';
+          return '<li class="reserve-li">'+num+'<b>지원</b><span class="sc">모집중</span></li>';
         }
         var m = memberById(id);
-        if(!m) return '<li class="reserve-li"><b>탈퇴/삭제됨</b><span>—</span></li>';
-        var isGK = team.gkQueue.indexOf(id) !== -1;
-        return '<li><b>'+esc(m.name)+'</b><span>'+totalScore(m)+'점'+(isGK ? '<span class="gk-star">GK후보</span>' : '')+'</span></li>';
+        if(!m) return '<li class="reserve-li">'+num+'<b>탈퇴/삭제됨</b><span class="sc">—</span></li>';
+        return '<li>'+num+'<b>'+esc(m.name)+'</b><span class="sc">'+totalScore(m)+'점</span></li>';
       }).join("");
       var color = team.color || TEAM_COLORS[i % TEAM_COLORS.length];
       var dotClass = state.adminMode ? "team-color-dot pickable" : "team-color-dot";
@@ -1251,7 +1228,10 @@
   }
 
   /* ---------------- Match day ---------------- */
-  var timer = { running:false, remaining:0, quarterIdx:0, quarterLen:15, quarterCount:2, gkSwitched:false, alertsFired:{}, intervalId:null };
+  // no automatic keeper-switch timer any more (previously: swap at the 7-minute mark of each
+  // quarter) — GK stays whoever is #1 in the team's roster order for the whole match, until a
+  // goal-triggered rotation (using that same numbered order) replaces this
+  var timer = { running:false, remaining:0, quarterIdx:0, quarterLen:15, quarterCount:2, alertsFired:{}, intervalId:null };
 
   function renderMatchSetup(){
     var hasTeams = !!state.teams;
@@ -1261,38 +1241,17 @@
     renderRostersStrip();
   }
 
-  function currentGK(team, quarterIdx){
-    if(!team.gkQueue || team.gkQueue.length === 0) return { before:null, after:null };
-    // one switch per quarter at the 7-minute mark → 2 keepers per quarter, continuing the rotation across quarters
-    var beforeSwitchIdx = (quarterIdx * 2) % team.gkQueue.length;
-    var afterSwitchIdx = (quarterIdx * 2 + 1) % team.gkQueue.length;
-    return { before: team.gkQueue[beforeSwitchIdx], after: team.gkQueue[afterSwitchIdx] };
-  }
-
   function renderRostersStrip(){
     var strip = document.getElementById("rostersStrip");
     strip.innerHTML = state.teams.map(function(team){
-      var gk = currentGK(team, timer.quarterIdx);
-      var activeGkId = timer.gkSwitched ? gk.after : gk.before;
-      var items = team.memberIds.map(function(id){
-        if(isReserve(id)) return '<li class="reserve-li">지원 (모집중)</li>';
+      var items = team.memberIds.map(function(id, idx){
+        var num = '<span class="roster-num">'+(idx+1)+'</span>';
+        if(isReserve(id)) return '<li class="reserve-li">'+num+'<span>지원 (모집중)</span></li>';
         var m = memberById(id);
-        if(!m) return '<li class="reserve-li">탈퇴/삭제됨</li>';
-        var isActiveGK = id === activeGkId;
-        return '<li'+(isActiveGK ? ' class="current-gk"' : '')+'>'+esc(m.name)+(isActiveGK ? ' — 현재 GK' : '')+'</li>';
+        if(!m) return '<li class="reserve-li">'+num+'<span>탈퇴/삭제됨</span></li>';
+        return '<li>'+num+'<span>'+esc(m.name)+'</span></li>';
       }).join("");
       return '<div class="roster-strip-card"><h4>'+team.name+'</h4><ul>'+items+'</ul></div>';
-    }).join("");
-  }
-
-  function renderGkRow(){
-    var row = document.getElementById("gkRow");
-    row.innerHTML = state.teams.map(function(team){
-      var gk = currentGK(team, timer.quarterIdx);
-      var activeGkId = timer.gkSwitched ? gk.after : gk.before;
-      var m = activeGkId ? memberById(activeGkId) : null;
-      var name = m ? esc(m.name) : "미배정";
-      return '<div class="gk-chip"><div class="gk-badge">GK</div><div><div class="t">'+team.name+'</div><div class="n">'+name+'</div></div></div>';
     }).join("");
   }
 
@@ -1328,18 +1287,10 @@
 
   function tick(){
     timer.remaining -= 1;
-    var elapsed = timer.quarterLen*60 - timer.remaining;
     var clockEl = document.getElementById("clockDisplay");
     clockEl.textContent = fmtClock(Math.max(timer.remaining,0));
     clockEl.className = "clock mono" + (timer.remaining <= 120 ? " critical" : (timer.remaining <= 300 ? " warn" : ""));
 
-    if(!timer.alertsFired.gk && elapsed >= 7*60){
-      timer.alertsFired.gk = true;
-      timer.gkSwitched = true;
-      renderGkRow();
-      renderRostersStrip();
-      showAlert("키퍼 교체! 7분 경과", "info");
-    }
     if(!timer.alertsFired.five && timer.remaining <= 5*60){
       timer.alertsFired.five = true;
       showAlert("잔여 시간 5분", "warn");
@@ -1357,12 +1308,10 @@
 
   function startQuarter(){
     timer.remaining = timer.quarterLen*60;
-    timer.gkSwitched = false;
     timer.alertsFired = {};
     document.getElementById("quarterLabel").textContent = (timer.quarterIdx+1)+"쿼터 / "+timer.quarterCount+"쿼터";
     document.getElementById("clockDisplay").textContent = fmtClock(timer.remaining);
     document.getElementById("clockDisplay").className = "clock mono";
-    renderGkRow();
     renderRostersStrip();
   }
 
