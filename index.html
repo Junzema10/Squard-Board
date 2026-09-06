@@ -1,0 +1,1430 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SQUADBOARD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  /* ---- Design tokens (single committed dark theme, matches sporty stat-sheet reference) ---- */
+  :root{
+    --bg-deep:#060b16;
+    --bg-panel:#0e1a30;
+    --bg-card:#122a4c;
+    --bg-card-hi:#173257;
+    --line:rgba(148,175,214,0.16);
+    --line-strong:rgba(148,175,214,0.30);
+    --accent:#3fa9ff;
+    --accent-soft:rgba(63,169,255,0.14);
+    --accent-strong:#7cc6ff;
+    --gold:#f2c94c;
+    --gold-soft:rgba(242,201,76,0.16);
+    --good:#33d17a;
+    --good-soft:rgba(51,209,122,0.16);
+    --warn:#f5a524;
+    --warn-soft:rgba(245,165,36,0.16);
+    --critical:#ef4444;
+    --critical-soft:rgba(239,68,68,0.18);
+    --text-1:#eef3fb;
+    --text-2:#9fb2cf;
+    --text-3:#6c7fa0;
+    --font-display:'Noto Sans KR',"Apple SD Gothic Neo",sans-serif;
+    --font-body:'Noto Sans KR',"Apple SD Gothic Neo",sans-serif;
+    --font-mono:'Noto Sans KR',"Apple SD Gothic Neo",sans-serif;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1100px 560px at 12% -10%, rgba(63,169,255,0.16), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(242,201,76,0.08), transparent 55%),
+      var(--bg-deep);
+    color:var(--text-1);
+    font-family:var(--font-body);
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,.display{
+    font-family:var(--font-display);
+    font-weight:700;
+    letter-spacing:0.01em;
+    text-wrap:balance;
+  }
+  .mono{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+  a{color:var(--accent-strong);}
+  button{font-family:inherit;}
+  ::selection{ background:var(--accent-soft); }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:0.01ms !important; animation-iteration-count:1 !important; transition-duration:0.01ms !important; }
+  }
+
+  /* ---------- App shell ---------- */
+  .topbar{
+    position:sticky; top:0; z-index:30;
+    background:linear-gradient(180deg, rgba(9,17,32,0.96), rgba(9,17,32,0.86));
+    backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);
+  }
+  .topbar-inner{
+    max-width:1180px; margin:0 auto; padding:14px 24px;
+    display:flex; align-items:center; gap:16px 28px;
+    flex-wrap:wrap; /* narrow screens: drop groups to a new line instead of squeezing them */
+  }
+  .brand{ display:flex; align-items:baseline; gap:10px; white-space:nowrap; }
+  .brand-mark{
+    font-family:var(--font-display); font-weight:800; font-size:24px;
+    letter-spacing:0.04em; color:var(--text-1); white-space:nowrap;
+  }
+  .brand-mark span{ color:var(--accent-strong); }
+  .brand-sub{ font-size:12px; color:var(--text-3); font-weight:600; letter-spacing:0.03em; white-space:nowrap; }
+
+  /* Korean/CJK text has no spaces, so a flex item can shrink-wrap it down to one character per
+     line if the row runs out of space — white-space:nowrap (here and on .tab/.admin-toggle below)
+     keeps every label intact; flex-wrap on the parents above/below sends whole groups to the next
+     line instead, so nothing ever gets squeezed into that vertical single-character stack. */
+  .tabs{ display:flex; gap:4px; margin-left:8px; flex-wrap:wrap; }
+  .tab{
+    appearance:none; border:none; background:transparent; color:var(--text-2);
+    font-family:var(--font-display); font-weight:600; font-size:16px; letter-spacing:0.03em;
+    padding:9px 14px; border-radius:7px; cursor:pointer; white-space:nowrap;
+    border-bottom:2px solid transparent;
+    transition:color .15s ease, background .15s ease, border-color .15s ease;
+  }
+  .tab:hover{ color:var(--text-1); background:rgba(255,255,255,0.04); }
+  .tab[aria-selected="true"]{ color:var(--text-1); border-bottom-color:var(--accent); }
+
+  .topbar-actions{ margin-left:auto; display:flex; align-items:center; gap:10px 14px; flex-wrap:wrap; }
+  .admin-toggle{
+    display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-2);
+    font-weight:600; white-space:nowrap;
+  }
+  @media (max-width:640px){
+    .topbar-inner{ padding:12px 16px; gap:10px 14px; }
+    .brand-sub{ display:none; } /* decorative subtitle only — first to go when space is tight */
+    .tabs{ margin-left:0; }
+    .tab{ font-size:14px; padding:7px 10px; }
+    .topbar-actions{ width:100%; margin-left:0; justify-content:space-between; }
+  }
+  .switch{
+    position:relative; width:40px; height:22px; border-radius:999px; background:var(--bg-card);
+    border:1px solid var(--line-strong); cursor:pointer; flex:none;
+  }
+  .switch::after{
+    content:""; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%;
+    background:var(--text-3); transition:transform .15s ease, background .15s ease;
+  }
+  .switch.on{ background:var(--accent-soft); border-color:var(--accent); }
+  .switch.on::after{ transform:translateX(18px); background:var(--accent); }
+  .save-status{ font-size:11px; color:var(--text-3); white-space:nowrap; flex:none; }
+
+  .container{ max-width:1180px; margin:0 auto; padding:28px 24px 80px; }
+  .panel{ display:none; }
+  .panel.active{ display:block; animation:fade .25s ease; }
+  @keyframes fade{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
+
+  .section-head{ display:flex; align-items:baseline; justify-content:space-between; gap:16px; margin-bottom:16px; flex-wrap:wrap; }
+  .section-head h2{ font-size:26px; margin:0; }
+  .section-head p{ margin:2px 0 0; color:var(--text-2); font-size:14px; }
+  .eyebrow{
+    font-family:var(--font-display); font-size:12px; letter-spacing:0.14em; color:var(--accent-strong);
+    text-transform:uppercase; font-weight:700; margin:0 0 4px;
+  }
+
+  .btn{
+    appearance:none; cursor:pointer; border-radius:8px; font-weight:700; font-family:var(--font-body);
+    font-size:14px; padding:10px 18px; border:1px solid var(--line-strong); color:var(--text-1);
+    background:var(--bg-card); transition:transform .1s ease, background .15s ease, border-color .15s ease;
+  }
+  .btn:hover{ background:var(--bg-card-hi); }
+  .btn:active{ transform:scale(0.98); }
+  .btn-primary{ background:var(--accent); border-color:var(--accent); color:#04121f; }
+  .btn-primary:hover{ background:var(--accent-strong); }
+  .btn-ghost{ background:transparent; }
+  .btn-sm{ padding:7px 12px; font-size:13px; border-radius:7px; }
+  .btn[disabled]{ opacity:0.4; cursor:not-allowed; }
+
+  /* ---------- Squad tab ---------- */
+  .squad-grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(210px,1fr)); gap:14px;
+  }
+  .player-card{
+    background:linear-gradient(180deg, var(--bg-card), var(--bg-panel));
+    border:1px solid var(--line); border-radius:10px; padding:16px;
+    cursor:pointer; position:relative; overflow:hidden;
+    transition:border-color .15s ease, transform .15s ease;
+  }
+  .player-card::before{
+    content:""; position:absolute; inset:0 0 auto 0; height:2px;
+    background:linear-gradient(90deg, var(--accent), transparent 70%);
+    opacity:0.7;
+  }
+  .player-card:hover{ border-color:var(--line-strong); transform:translateY(-2px); }
+  .player-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+  .player-name{ font-family:var(--font-display); font-size:20px; font-weight:700; line-height:1.15; }
+  .pos-tag{
+    font-family:var(--font-mono); font-size:11px; font-weight:600; padding:3px 7px; border-radius:5px;
+    letter-spacing:0.04em; flex:none;
+  }
+  .pos-FW{ background:var(--critical-soft); color:#ff9d9d; }
+  .pos-MF{ background:var(--good-soft); color:#7be8ab; }
+  .pos-DF{ background:var(--accent-soft); color:var(--accent-strong); }
+  .pos-GK{ background:var(--gold-soft); color:var(--gold); }
+  .player-score{ font-family:var(--font-mono); font-size:34px; font-weight:600; margin-top:10px; color:var(--text-1); }
+  .player-score small{ font-family:var(--font-body); font-size:12px; color:var(--text-3); font-weight:600; margin-left:4px; }
+  .mini-radar{ margin-top:8px; opacity:0.9; }
+
+  .squad-controls{ display:flex; align-items:center; justify-content:flex-end; gap:18px; margin-bottom:16px; flex-wrap:wrap; }
+  .squad-controls .seg{ width:auto; }
+  .squad-controls .seg button{ flex:none; padding:7px 14px; }
+
+  .list-table-wrap{ overflow-x:auto; border:1px solid var(--line); border-radius:10px; }
+  table.roster-table{ width:100%; border-collapse:collapse; font-size:13.5px; white-space:nowrap; }
+  table.roster-table thead th{
+    position:sticky; top:0; background:var(--bg-panel); text-align:left; font-family:var(--font-display);
+    text-transform:uppercase; letter-spacing:0.06em; font-size:11px; font-weight:600; color:var(--text-3);
+    padding:10px 14px; border-bottom:1px solid var(--line-strong);
+  }
+  table.roster-table thead th.num, table.roster-table td.num{ text-align:right; }
+  table.roster-table tbody td{ padding:9px 14px; border-bottom:1px solid var(--line); color:var(--text-2); }
+  table.roster-table tbody tr{ cursor:pointer; transition:background .12s ease; }
+  table.roster-table tbody tr:hover{ background:rgba(255,255,255,0.035); }
+  table.roster-table td.name{ color:var(--text-1); font-weight:700; font-family:var(--font-display); font-size:15px; }
+  table.roster-table td.total{ color:var(--accent-strong); font-weight:700; font-family:var(--font-mono); }
+
+  /* ---------- Modal (player detail) ---------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(3,7,16,0.72); backdrop-filter:blur(3px);
+    display:none; align-items:center; justify-content:center; z-index:50; padding:20px;
+  }
+  .overlay.active{ display:flex; }
+  .modal{
+    background:var(--bg-panel); border:1px solid var(--line-strong); border-radius:14px;
+    max-width:560px; width:100%; max-height:88vh; overflow-y:auto; padding:26px 28px;
+    box-shadow:0 30px 80px rgba(0,0,0,0.5);
+  }
+  .modal-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+  .name-edit{
+    font-family:var(--font-display); font-weight:700; font-size:28px; color:var(--text-1);
+    background:transparent; border:none; border-bottom:2px dashed var(--line-strong); padding:0 0 2px;
+    width:100%; max-width:260px;
+  }
+  .name-edit:focus{ outline:none; border-bottom-color:var(--accent); }
+  .modal-close{ background:none; border:none; color:var(--text-2); font-size:22px; cursor:pointer; line-height:1; padding:2px 6px; }
+  .modal-close:hover{ color:var(--text-1); }
+  .radar-wrap{ display:flex; justify-content:center; margin:14px 0 6px; }
+  .stat-rows{ display:flex; flex-direction:column; gap:10px; margin-top:10px; }
+  .stat-row{ display:grid; grid-template-columns:64px 1fr 30px; align-items:center; gap:10px; }
+  .stat-row label{ font-size:13px; color:var(--text-2); font-weight:600; }
+  .stat-row .val{ font-family:var(--font-mono); text-align:right; color:var(--text-1); font-weight:600; }
+  .bar-track{ height:8px; border-radius:5px; background:var(--bg-card); overflow:hidden; border:1px solid var(--line); }
+  .bar-fill{ height:100%; background:linear-gradient(90deg, var(--accent), var(--accent-strong)); border-radius:5px; }
+  input[type="range"]{
+    width:100%; accent-color:var(--accent); background:transparent;
+  }
+
+  /* ---------- Team builder ---------- */
+  .builder-grid{ display:grid; grid-template-columns:300px 1fr; gap:20px; align-items:start; }
+  @media (max-width:860px){ .builder-grid{ grid-template-columns:1fr; } }
+  .card{
+    background:var(--bg-panel); border:1px solid var(--line); border-radius:12px; padding:18px 20px;
+  }
+  .field{ margin-bottom:16px; }
+  .field label{ display:block; font-size:12px; font-weight:700; color:var(--text-2); letter-spacing:0.04em; text-transform:uppercase; margin-bottom:8px; }
+  .seg{ display:flex; gap:6px; }
+  .seg button{
+    flex:1; padding:8px 0; border-radius:7px; border:1px solid var(--line-strong); background:var(--bg-card);
+    color:var(--text-2); font-weight:700; cursor:pointer; font-family:var(--font-mono); font-size:14px;
+  }
+  .seg button[aria-pressed="true"]{ background:var(--accent-soft); border-color:var(--accent); color:var(--accent-strong); }
+  select.field-input, input.field-input{
+    width:100%; background:var(--bg-card); border:1px solid var(--line-strong); color:var(--text-1);
+    padding:9px 10px; border-radius:7px; font-family:var(--font-mono); font-size:14px;
+  }
+  .attend-list{ display:flex; flex-direction:column; gap:6px; max-height:280px; overflow-y:auto; padding-right:4px; }
+  .attend-row{ display:flex; align-items:center; gap:10px; font-size:13.5px; padding:6px 8px; border-radius:7px; }
+  .attend-row:hover{ background:rgba(255,255,255,0.03); }
+  .attend-row input{ accent-color:var(--accent); width:16px; height:16px; }
+  .attend-row .nm{ flex:1; font-weight:600; }
+  .attend-row .sc{ font-family:var(--font-mono); color:var(--text-3); font-size:12px; }
+  .attend-row.guest-row{ background:rgba(242,201,76,0.05); }
+  .guest-badge{
+    font-family:var(--font-mono); font-size:10px; font-weight:700; color:var(--gold); background:var(--gold-soft);
+    padding:2px 6px; border-radius:4px; letter-spacing:0.04em; margin-left:6px;
+  }
+  .attend-remove{
+    background:none; border:none; color:var(--text-3); font-size:16px; line-height:1; cursor:pointer; padding:2px 4px;
+    flex:none;
+  }
+  .attend-remove:hover{ color:var(--critical); }
+  .guest-add-row{ display:flex; gap:8px; margin-top:10px; }
+  .guest-add-row .field-input{ flex:1; }
+  .guest-add-row .btn{ flex:none; white-space:nowrap; }
+  .guest-stats-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:8px; }
+  .guest-stat-field{ display:flex; flex-direction:column; gap:4px; }
+  .guest-stat-field label{ font-size:10px; color:var(--text-3); font-weight:700; letter-spacing:0.03em; }
+  .guest-stat-field input{
+    width:100%; background:var(--bg-card); border:1px solid var(--line-strong); color:var(--text-1);
+    padding:6px 6px; border-radius:6px; font-family:var(--font-mono); font-size:13px; text-align:center;
+  }
+
+  .teams-out{ display:grid; grid-template-columns:repeat(auto-fit, minmax(240px,1fr)); gap:14px; }
+  .team-card{ background:var(--bg-card); border:1px solid var(--line); border-radius:10px; padding:16px; }
+  .team-card-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .team-card-head h3{ font-size:19px; margin:0; }
+  .balance-pill{
+    font-family:var(--font-mono); font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px;
+  }
+  .balance-good{ background:var(--good-soft); color:var(--good); }
+  .balance-warn{ background:var(--warn-soft); color:var(--warn); }
+  .balance-bad{ background:var(--critical-soft); color:var(--critical); }
+  .team-total{ font-family:var(--font-mono); font-size:28px; font-weight:600; margin-bottom:8px; }
+  .roster-mini{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:5px; }
+  .roster-mini li{ display:flex; justify-content:space-between; font-size:13px; color:var(--text-2); }
+  .roster-mini li b{ color:var(--text-1); font-weight:600; }
+  .gk-star{ color:var(--gold); font-family:var(--font-mono); font-size:11px; margin-left:6px; }
+  .roster-mini li.reserve-li{ color:var(--text-3); font-style:italic; }
+  .roster-mini li.reserve-li b{ color:var(--text-3); font-weight:600; }
+
+  .notice-banner{
+    display:none; align-items:center; gap:10px; margin-bottom:14px; padding:12px 14px; border-radius:9px;
+    font-size:13.5px; font-weight:600; background:var(--warn-soft); color:var(--warn); border:1px solid var(--warn);
+  }
+  .notice-banner.show{ display:flex; }
+
+  .empty-hint{
+    border:1px dashed var(--line-strong); border-radius:10px; padding:28px; text-align:center; color:var(--text-2);
+  }
+
+  /* ---------- Match day ---------- */
+  .match-setup{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; margin-bottom:18px; }
+  .match-live{
+    background:radial-gradient(700px 320px at 50% -20%, rgba(63,169,255,0.16), transparent 65%), var(--bg-panel);
+    border:1px solid var(--line-strong); border-radius:16px; padding:32px 28px; text-align:center;
+  }
+  .quarter-label{ font-family:var(--font-display); font-size:14px; letter-spacing:0.14em; color:var(--text-2); text-transform:uppercase; }
+  .clock{
+    font-family:var(--font-display); font-weight:700; font-size:112px; line-height:1; margin:6px 0 10px;
+    font-variant-numeric:tabular-nums; letter-spacing:0.01em;
+  }
+  .clock.warn{ color:var(--warn); }
+  .clock.critical{ color:var(--critical); animation:pulse 1s ease-in-out infinite; }
+  @media (prefers-reduced-motion:reduce){ .clock.critical{ animation:none; } }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.55;} }
+
+  .gk-row{ display:flex; justify-content:center; gap:28px; margin:14px 0 22px; flex-wrap:wrap; }
+  .gk-chip{
+    display:flex; align-items:center; gap:8px; background:var(--bg-card); border:1px solid var(--line);
+    border-radius:999px; padding:8px 16px 8px 8px;
+  }
+  .gk-badge{
+    width:26px; height:26px; border-radius:50%; background:var(--gold-soft); color:var(--gold);
+    display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:11px; font-weight:700;
+  }
+  .gk-chip .t{ font-size:11px; color:var(--text-3); text-transform:uppercase; letter-spacing:0.04em; }
+  .gk-chip .n{ font-weight:700; }
+
+  .alert-banner{
+    display:none; align-items:center; justify-content:center; gap:10px; margin:0 auto 18px; max-width:480px;
+    padding:12px 18px; border-radius:10px; font-weight:700; font-family:var(--font-display); font-size:18px;
+    letter-spacing:0.02em;
+  }
+  .alert-banner.show{ display:flex; animation:slidein .25s ease; }
+  @keyframes slidein{ from{ opacity:0; transform:translateY(-6px);} to{opacity:1; transform:none;} }
+  .alert-info{ background:var(--accent-soft); color:var(--accent-strong); border:1px solid var(--accent); }
+  .alert-warn{ background:var(--warn-soft); color:var(--warn); border:1px solid var(--warn); }
+  .alert-critical{ background:var(--critical-soft); color:var(--critical); border:1px solid var(--critical); }
+
+  .live-controls{ display:flex; justify-content:center; gap:10px; flex-wrap:wrap; }
+  .mode-row{ display:flex; justify-content:flex-end; gap:8px; margin-bottom:10px; }
+
+  .rosters-strip{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; margin-top:22px; }
+  .roster-strip-card{ background:var(--bg-card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; text-align:left; }
+  .roster-strip-card h4{ margin:0 0 8px; font-size:16px; font-family:var(--font-display); }
+  .roster-strip-card ul{ list-style:none; margin:0; padding:0; font-size:13px; color:var(--text-2); display:flex; flex-direction:column; gap:4px; }
+  .roster-strip-card ul li.current-gk{ color:var(--gold); font-weight:700; }
+  .roster-strip-card ul li.reserve-li{ color:var(--text-3); font-style:italic; }
+
+  /* ---------- Public / shared-screen mode ---------- */
+  body.public-mode .topbar,
+  body.public-mode .section-head,
+  body.public-mode .match-setup,
+  body.public-mode .rosters-strip{ display:none !important; }
+  body.public-mode .container{ padding:0; max-width:none; }
+  body.public-mode .match-live{
+    min-height:100vh; border-radius:0; border:none; display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+  }
+  body.public-mode .clock{ font-size:min(26vw,300px); }
+  body.public-mode .quarter-label{ font-size:22px; }
+  body.public-mode .gk-chip{ padding:14px 26px 14px 12px; }
+  body.public-mode .gk-badge{ width:38px; height:38px; font-size:15px; }
+  body.public-mode .gk-chip .n{ font-size:22px; }
+  body.public-mode .alert-banner{ font-size:28px; padding:18px 30px; }
+  body.public-mode .live-controls .btn:not(.exit-public){ display:none; }
+
+  footer{ text-align:center; color:var(--text-3); font-size:12px; padding:30px 16px 10px; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-mark">SQUAD<span>BOARD</span></div>
+      <div class="brand-sub">우리 동호회 매치 매니저 · 데모</div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="주요 화면">
+      <button class="tab" role="tab" aria-selected="true" data-panel="squad">스쿼드</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="builder">팀 편성</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="match">매치 데이</button>
+    </nav>
+    <div class="topbar-actions">
+      <div class="admin-toggle">
+        운영진 모드
+        <div class="switch" id="adminSwitch" role="switch" aria-checked="false" tabindex="0"></div>
+      </div>
+      <span class="save-status mono" id="saveStatus"></span>
+      <button class="btn btn-ghost btn-sm" id="resetDemoBtn" title="데모 데이터를 초기 상태로 되돌립니다">데모 초기화</button>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- ===================== SQUAD PANEL ===================== -->
+  <section class="panel active" id="panel-squad">
+    <div class="section-head">
+      <div>
+        <p class="eyebrow">Player Archive</p>
+        <h2>회원 능력치</h2>
+        <p>카드를 눌러 6개 항목 레이더와 상세 점수를 확인하세요. 능력치 수정은 운영진 모드에서만 가능합니다.</p>
+      </div>
+    </div>
+
+    <div class="squad-controls">
+      <div class="admin-toggle">
+        포지션 표시
+        <div class="switch on" id="posSwitch" role="switch" aria-checked="true" tabindex="0"></div>
+      </div>
+      <div class="seg" id="squadViewSeg">
+        <button data-val="card" aria-pressed="true">카드형</button>
+        <button data-val="list" aria-pressed="false">리스트형</button>
+      </div>
+    </div>
+
+    <div class="squad-grid" id="squadGrid"></div>
+    <div class="list-table-wrap" id="squadListWrap" style="display:none;">
+      <table class="roster-table" id="squadTable">
+        <thead><tr id="squadTableHead"></tr></thead>
+        <tbody id="squadTableBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== TEAM BUILDER PANEL ===================== -->
+  <section class="panel" id="panel-builder">
+    <div class="section-head">
+      <div>
+        <p class="eyebrow">Balanced Draft</p>
+        <h2>팀 편성</h2>
+        <p>참석 인원과 팀 구성을 정하면 능력치 총합 기준 스네이크 드래프트로 팀을 나눕니다.</p>
+      </div>
+    </div>
+
+    <div class="builder-grid">
+      <div class="card">
+        <div class="field">
+          <label>팀 수</label>
+          <div class="seg" id="teamCountSeg">
+            <button data-val="2" aria-pressed="true">2파전</button>
+            <button data-val="3" aria-pressed="false">3파전</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>팀당 인원</label>
+          <select class="field-input" id="teamSizeSelect">
+            <option value="4">4명 (4vs4)</option>
+            <option value="5" selected>5명 (5vs5)</option>
+            <option value="6">6명 (6vs6)</option>
+            <option value="7">7명 (7vs7)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>오늘 참석 인원 (<span id="attendCount">0</span>명)</label>
+          <div class="attend-list" id="attendList"></div>
+          <div class="guest-add-row">
+            <input type="text" class="field-input" id="guestNameInput" placeholder="게스트 이름" maxlength="20">
+          </div>
+          <div class="guest-stats-grid" id="guestStatsGrid"></div>
+          <button class="btn btn-sm" id="addGuestBtn" type="button" style="width:100%;margin-top:8px;">+ 게스트 추가</button>
+        </div>
+        <button class="btn btn-primary" id="buildTeamsBtn" style="width:100%;">팀 생성</button>
+      </div>
+
+      <div id="teamsResultWrap">
+        <div class="empty-hint">아직 편성된 팀이 없습니다. 왼쪽에서 참석 인원과 팀 구성을 정하고 "팀 생성"을 눌러보세요.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== MATCH DAY PANEL ===================== -->
+  <section class="panel" id="panel-match">
+    <div class="section-head">
+      <div>
+        <p class="eyebrow">Match Day</p>
+        <h2>매치 진행</h2>
+        <p>쿼터 타이머와 키퍼 교체를 자동으로 알려줍니다. 개인 화면과 경기장 공용 화면 두 모드를 지원합니다.</p>
+      </div>
+    </div>
+
+    <div id="matchNoTeams" class="empty-hint">먼저 "팀 편성" 탭에서 팀을 만들어주세요.</div>
+
+    <div id="matchReady" style="display:none;">
+      <div class="match-setup">
+        <div class="card">
+          <div class="field" style="margin-bottom:0;">
+            <label>쿼터 길이(분)</label>
+            <input class="field-input" type="number" id="quarterLenInput" value="15" min="5" max="30">
+          </div>
+        </div>
+        <div class="card">
+          <div class="field" style="margin-bottom:0;">
+            <label>총 쿼터 수</label>
+            <input class="field-input" type="number" id="quarterCountInput" value="2" min="1" max="6">
+          </div>
+        </div>
+        <div class="card">
+          <div class="field" style="margin-bottom:0;">
+            <label>키퍼 교체 규칙</label>
+            <div style="font-family:var(--font-mono); font-size:13px; color:var(--text-2); padding-top:8px;">
+              쿼터 시작 <b style="color:var(--text-1)">7분</b> 경과 시 교체
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mode-row">
+        <button class="btn btn-sm" id="startMatchBtn">매치 시작</button>
+      </div>
+
+      <div class="match-live" id="matchLive" style="display:none;">
+        <div class="quarter-label" id="quarterLabel">1쿼터 / 2쿼터</div>
+        <div class="clock mono" id="clockDisplay">15:00</div>
+
+        <div class="alert-banner" id="alertBanner"></div>
+
+        <div class="gk-row" id="gkRow"></div>
+
+        <div class="live-controls">
+          <button class="btn btn-sm" id="pauseBtn">일시정지</button>
+          <button class="btn btn-sm" id="publicToggleBtn">공용 화면으로 보기</button>
+          <button class="btn btn-sm exit-public" id="exitPublicBtn" style="display:none;">공용 화면 종료</button>
+          <button class="btn btn-sm btn-ghost" id="endMatchBtn">매치 종료</button>
+        </div>
+      </div>
+
+      <div class="rosters-strip" id="rostersStrip"></div>
+    </div>
+  </section>
+
+</div>
+
+<footer>SQUADBOARD 데모 · 이 링크를 여는 모든 기기에 같은 데이터가 공유·저장됩니다</footer>
+
+<!-- Player detail modal -->
+<div class="overlay" id="playerOverlay">
+  <div class="modal" id="playerModal"></div>
+</div>
+
+<!-- Notice popup (e.g. insufficient attendees) -->
+<div class="overlay" id="noticeOverlay">
+  <div class="modal" id="noticeModal" style="max-width:420px;text-align:center;"></div>
+</div>
+
+<script id="stateData" type="application/json">{"members":[{"id":"m1","name":"이준영","position":"FW","stats":{"슈팅":7,"수비":5,"스피드":6,"드리블":7,"체력":5,"패스":8}},{"id":"m2","name":"전준모","position":"MF","stats":{"슈팅":6,"수비":7,"스피드":5,"드리블":8,"체력":6,"패스":7}},{"id":"m3","name":"안교형","position":"DF","stats":{"슈팅":7,"수비":4,"스피드":4,"드리블":8,"체력":4,"패스":7}},{"id":"m4","name":"홍광락","position":"FW","stats":{"슈팅":8,"수비":5,"스피드":7,"드리블":7,"체력":6,"패스":5}},{"id":"m5","name":"임정빈","position":"GK","stats":{"슈팅":4,"수비":3,"스피드":6,"드리블":4,"체력":6,"패스":3}},{"id":"m6","name":"김홍준","position":"DF","stats":{"슈팅":4,"수비":6,"스피드":5,"드리블":3,"체력":5,"패스":5}},{"id":"m7","name":"김춘추","position":"FW","stats":{"슈팅":4,"수비":6,"스피드":5,"드리블":6,"체력":5,"패스":4}},{"id":"m8","name":"마엘","position":"MF","stats":{"슈팅":7,"수비":6,"스피드":8,"드리블":7,"체력":6,"패스":5}},{"id":"m9","name":"박민우","position":"DF","stats":{"슈팅":7,"수비":6,"스피드":8,"드리블":6,"체력":7,"패스":6}},{"id":"m10","name":"서정화","position":"FW","stats":{"슈팅":7,"수비":6,"스피드":6,"드리블":7,"체력":6,"패스":6}},{"id":"m11","name":"서경동","position":"MF","stats":{"슈팅":6,"수비":7,"스피드":4,"드리블":5,"체력":6,"패스":5}},{"id":"m12","name":"정병수","position":"DF","stats":{"슈팅":4,"수비":6,"스피드":3,"드리블":4,"체력":8,"패스":3}},{"id":"m13","name":"채진경","position":"FW","stats":{"슈팅":9,"수비":6,"스피드":7,"드리블":8,"체력":6,"패스":7}},{"id":"m14","name":"장인희","position":"MF","stats":{"슈팅":7,"수비":5,"스피드":6,"드리블":7,"체력":5,"패스":5}},{"id":"m15","name":"김지섭","position":"GK","stats":{"슈팅":6,"수비":4,"스피드":4,"드리블":6,"체력":3,"패스":5}},{"id":"m16","name":"박재주","position":"FW","stats":{"슈팅":8,"수비":5,"스피드":6,"드리블":7,"체력":6,"패스":6}},{"id":"m17","name":"차상원","position":"MF","stats":{"슈팅":9,"수비":6,"스피드":7,"드리블":7,"체력":6,"패스":7}},{"id":"m18","name":"도솔","position":"DF","stats":{"슈팅":8,"수비":6,"스피드":6,"드리블":8,"체력":7,"패스":7}}],"attendance":{"m1":true,"m2":true,"m3":true,"m4":true,"m5":true,"m6":true,"m7":true,"m8":true,"m9":true,"m10":true,"m11":true,"m12":true,"m13":true,"m14":true,"m15":true,"m16":true,"m17":true,"m18":true},"teamCount":2,"teamSize":5,"teams":[{"name":"팀 A","memberIds":["m2","m4","m5","m8","m9","m12","m13","m16","m17"],"gkQueue":["m2","m4"]},{"name":"팀 B","memberIds":["m1","m3","m6","m7","m10","m11","m14","m15","m18"],"gkQueue":["m1","m3"]}],"adminMode":true,"showPositions":false,"squadView":"list","guests":[],"lastShortfall":0,"seedVersion":2}</script>
+<script id="mainScript">
+(function(){
+  "use strict";
+
+  var CATS = ["슈팅","수비","스피드","드리블","체력","패스"];
+  var MAX_STAT = 10;
+  var MAX_TOTAL = MAX_STAT * CATS.length;
+  var STORAGE_KEY = "squadboard_demo_v1";
+  var RESERVE_PREFIX = "RESERVE_";
+  var GUEST_PREFIX = "GUEST_";
+  function isReserve(id){ return typeof id === "string" && id.indexOf(RESERVE_PREFIX) === 0; }
+  function isGuest(id){ return typeof id === "string" && id.indexOf(GUEST_PREFIX) === 0; }
+  function esc(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  // when this page was published with shared data (via the "artifact" capability), the platform
+  // embeds the current state here as JSON; a bare/offline copy of this file has "null" and falls
+  // back to this browser's localStorage, then to the seed roster below
+  var EMBEDDED_STATE = (function(){
+    try{
+      var el = document.getElementById("stateData");
+      var parsed = el ? JSON.parse(el.textContent) : null;
+      return parsed;
+    }catch(e){ return null; }
+  })();
+
+  function seedMembers(){
+    // real club roster (미드나잇FC 파주/고양 실내풋살, 18명)
+    var names = ["이준영","전준모","안교형","홍광락","임정빈","김홍준","김춘추","마엘",
+                 "박민우","서정화","서경동","정병수","채진경","장인희","김지섭","박재주",
+                 "차상원","도솔"];
+    return names.map(function(nm, i){
+      // keep GK rare: only 2 players tagged GK, rest split evenly across FW/MF/DF
+      var pos = ["FW","MF","DF"][i % 3];
+      if(i === 4 || i === 14) pos = "GK";
+      // no invented ability judgments for real members — every category starts at a neutral
+      // mid value (5/10, 30 total) until 운영진 enters real assessments in 운영진 모드
+      var stats = {};
+      CATS.forEach(function(c){ stats[c] = Math.round(MAX_STAT/2); });
+      return { id:"m"+(i+1), name:nm, position:pos, stats:stats };
+    });
+  }
+
+  function loadState(){
+    try{
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if(raw){ return JSON.parse(raw); }
+    }catch(e){ /* storage unavailable — fall through to seed */ }
+    return null;
+  }
+
+  function saveState(){
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+    catch(e){ /* ignore — demo still works in-memory */ }
+  }
+
+  // bump this whenever the seed roster changes — a saved browser copy from an older roster
+  // (e.g. the old placeholder names) is auto-refreshed to the current one instead of staying stale
+  var SEED_VERSION = 2;
+
+  var seeded = EMBEDDED_STATE || loadState();
+  var state = seeded || {
+    members: seedMembers(),
+    attendance: {},   // id -> bool
+    teamCount: 2,
+    teamSize: 5,
+    teams: null,      // array of {name, memberIds, gkQueue}
+    adminMode: false,
+    showPositions: true,
+    squadView: "card",
+    lastShortfall: 0,
+    guests: [],
+    seedVersion: SEED_VERSION
+  };
+  if(state.seedVersion !== SEED_VERSION){
+    // the saved copy predates the current roster — replace the member list and anything that
+    // references old member ids, but keep the viewer's display prefs (admin mode, view type, etc.)
+    state.members = seedMembers();
+    state.attendance = {};
+    state.members.forEach(function(m){ state.attendance[m.id] = true; });
+    state.teams = null;
+    state.guests = [];
+    state.lastShortfall = 0;
+    state.seedVersion = SEED_VERSION;
+  }
+  if(!state.attendance || Object.keys(state.attendance).length === 0){
+    state.attendance = {};
+    state.members.forEach(function(m){ state.attendance[m.id] = true; });
+  }
+  if(typeof state.showPositions !== "boolean") state.showPositions = true;
+  if(state.squadView !== "card" && state.squadView !== "list") state.squadView = "card";
+  if(!state.guests) state.guests = [];
+  saveState();
+
+  /* ---------------- Shared cross-device persistence (Firebase Firestore) ---------------- */
+  // Local saveState() above always mirrors to this browser's localStorage as a fast local cache /
+  // offline fallback. The real source of truth is a single Firestore document — every device that
+  // opens this page subscribes to it in real time (onSnapshot) and writes to it on edits, so there
+  // is no "version" concept at all: everyone always converges on whatever was written last.
+  var FIREBASE_CONFIG = {
+    apiKey: "AIzaSyCpS3fNZTRrj0orlCYV4criWd14ArO6BHA",
+    authDomain: "squad-board-8d46e.firebaseapp.com",
+    projectId: "squad-board-8d46e",
+    storageBucket: "squad-board-8d46e.firebasestorage.app",
+    messagingSenderId: "886476355270",
+    appId: "1:886476355270:web:326fb1e2f53de8c1f2c9c7"
+  };
+  var FS_COLLECTION = "squadboard";
+  var FS_DOC = "state";
+
+  var fsMod = null;          // the firebase-firestore module, once loaded
+  var fsDb = null;
+  var fsDocRef = null;
+  var firestoreReady = false;
+  var canWriteRemote = true;
+  var suppressPersist = false; // true only while renderAll() is re-syncing UI controls from saved state
+  // Firestore delivers a fresh snapshot (from this tab's own write, or anyone else's) almost
+  // instantly — if we rebuilt the whole page mid-edit while the player-detail modal was open, the
+  // modal would appear to "auto-close" itself. So while that modal is open we only mirror edits
+  // locally (saveState) and mark modalDirty; the one write for the whole editing session fires
+  // from closePlayerModal(), and any remote update that arrives while the modal is open is queued
+  // in pendingRemoteState and applied right after it closes instead of interrupting the user.
+  var modalDirty = false;
+  var pendingRemoteState = null;
+  var persistTimer = null;
+  var persistInFlight = false;
+  var persistDirtyWhileInFlight = false;
+  var applyingRemote = false; // true while a just-received snapshot is being rendered — never re-persist that
+
+  function setSaveStatus(text){
+    var el = document.getElementById("saveStatus");
+    if(el) el.textContent = text || "";
+  }
+
+  function modalIsOpen(){
+    var el = document.getElementById("playerOverlay");
+    return !!(el && el.classList.contains("active"));
+  }
+
+  function applyRemoteState(newState){
+    applyingRemote = true;
+    state = newState;
+    saveState();
+    suppressPersist = true;
+    renderAll();
+    suppressPersist = false;
+    applyingRemote = false;
+  }
+
+  function doPersist(){
+    if(!firestoreReady || !canWriteRemote) return;
+    if(persistInFlight){ persistDirtyWhileInFlight = true; return; }
+    persistInFlight = true;
+    setSaveStatus("저장 중…");
+    fsMod.setDoc(fsDocRef, state).then(function(){
+      persistInFlight = false;
+      setSaveStatus("저장됨 · 모든 기기에 공유됨");
+      if(persistDirtyWhileInFlight){
+        persistDirtyWhileInFlight = false;
+        doPersist();
+      }
+    }, function(err){
+      persistInFlight = false;
+      var code = err && err.code;
+      if(code === "permission-denied"){
+        canWriteRemote = false;
+        setSaveStatus("읽기 전용 화면 (이 화면에서는 저장되지 않음)");
+        return;
+      }
+      setSaveStatus("저장 재시도 중…");
+      setTimeout(doPersist, 1500 + Math.random()*1500);
+    });
+  }
+
+  function schedulePersist(){
+    saveState();
+    if(suppressPersist || applyingRemote) return;
+    if(!firestoreReady) return; // Firebase not reachable yet (or not loaded) — localStorage-only for now
+    setSaveStatus("저장 대기 중…");
+    clearTimeout(persistTimer);
+    persistTimer = setTimeout(doPersist, 1200);
+  }
+
+  Promise.all([
+    import("https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js"),
+    import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js")
+  ]).then(function(mods){
+    var appMod = mods[0];
+    fsMod = mods[1];
+    var app = appMod.initializeApp(FIREBASE_CONFIG);
+    fsDb = fsMod.getFirestore(app);
+    fsDocRef = fsMod.doc(fsDb, FS_COLLECTION, FS_DOC);
+    firestoreReady = true;
+
+    fsMod.onSnapshot(fsDocRef, function(snap){
+      if(!snap.exists()){
+        // first run against a brand-new Firestore project — seed it with whatever this page
+        // already has (embedded real data, or this browser's local copy) so every future device
+        // converges on it instead of starting from nothing
+        fsMod.setDoc(fsDocRef, state).catch(function(){ /* will retry on next edit */ });
+        return;
+      }
+      var data = snap.data();
+      if(modalIsOpen()){ pendingRemoteState = data; return; }
+      applyRemoteState(data);
+    }, function(err){
+      canWriteRemote = false;
+      setSaveStatus("연결 오류 · 이 기기에만 저장됨");
+    });
+  }).catch(function(e){
+    setSaveStatus("Firebase 연결 실패 · 이 기기에만 저장됨");
+  });
+
+  function totalScore(m){
+    return CATS.reduce(function(s,c){ return s + m.stats[c]; }, 0);
+  }
+  function allPeople(){
+    return state.members.concat(state.guests || []);
+  }
+  function memberById(id){
+    return allPeople().filter(function(m){ return m.id === id; })[0];
+  }
+
+  /* ---------------- Radar chart (hand-drawn SVG, no library needed) ---------------- */
+  function radarSVG(stats, size, opts){
+    opts = opts || {};
+    var cx = size/2, cy = size/2, r = size/2 - (opts.pad || 22);
+    var n = CATS.length;
+    function pt(i, val){
+      var angle = -Math.PI/2 + i * (2*Math.PI/n);
+      var rad = (val/MAX_STAT) * r;
+      return [cx + rad*Math.cos(angle), cy + rad*Math.sin(angle)];
+    }
+    var rings = [0.34, 0.67, 1];
+    var gridPolys = rings.map(function(frac){
+      var pts = [];
+      for(var i=0;i<n;i++){
+        var angle = -Math.PI/2 + i*(2*Math.PI/n);
+        pts.push((cx + frac*r*Math.cos(angle)).toFixed(1) + "," + (cy + frac*r*Math.sin(angle)).toFixed(1));
+      }
+      return '<polygon points="'+pts.join(" ")+'" fill="none" stroke="var(--line)" stroke-width="1"/>';
+    }).join("");
+
+    var axisLines = "";
+    var labels = "";
+    for(var i=0;i<n;i++){
+      var p = pt(i, MAX_STAT);
+      axisLines += '<line x1="'+cx+'" y1="'+cy+'" x2="'+p[0].toFixed(1)+'" y2="'+p[1].toFixed(1)+'" stroke="var(--line)" stroke-width="1"/>';
+      if(!opts.mini){
+        var lp = pt(i, MAX_STAT*1.22);
+        labels += '<text x="'+lp[0].toFixed(1)+'" y="'+lp[1].toFixed(1)+'" text-anchor="middle" dominant-baseline="middle" class="mono" font-size="11" fill="var(--text-2)">'+CATS[i]+'</text>';
+      }
+    }
+
+    var dataPts = CATS.map(function(c,i){ return pt(i, stats[c]); });
+    var dataPoly = dataPts.map(function(p){ return p[0].toFixed(1)+","+p[1].toFixed(1); }).join(" ");
+    var dots = opts.mini ? "" : dataPts.map(function(p){
+      return '<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="3.2" fill="var(--accent-strong)"/>';
+    }).join("");
+
+    return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'" role="img" aria-label="능력치 레이더 차트">'
+      + gridPolys + axisLines
+      + '<polygon points="'+dataPoly+'" fill="var(--accent)" fill-opacity="0.28" stroke="var(--accent-strong)" stroke-width="2"/>'
+      + dots + labels
+      + '</svg>';
+  }
+
+  /* ---------------- Squad panel ---------------- */
+  function renderSquad(){
+    var gridWrap = document.getElementById("squadGrid");
+    var listWrap = document.getElementById("squadListWrap");
+
+    if(state.squadView === "list"){
+      gridWrap.style.display = "none";
+      listWrap.style.display = "block";
+      renderSquadTable();
+      return;
+    }
+    gridWrap.style.display = "grid";
+    listWrap.style.display = "none";
+
+    gridWrap.innerHTML = state.members.map(function(m){
+      var posTag = state.showPositions
+        ? '<span class="pos-tag pos-'+m.position+'">'+m.position+'</span>' : '';
+      return '<article class="player-card" data-id="'+m.id+'">'
+        + '<div class="player-top"><div class="player-name">'+esc(m.name)+'</div>'+posTag+'</div>'
+        + '<div class="player-score">'+totalScore(m)+'<small>/ '+MAX_TOTAL+' 총점</small></div>'
+        + '<div class="mini-radar">'+radarSVG(m.stats, 96, {mini:true, pad:10})+'</div>'
+        + '</article>';
+    }).join("");
+
+    Array.prototype.forEach.call(gridWrap.querySelectorAll(".player-card"), function(card){
+      card.addEventListener("click", function(){ openPlayerModal(card.getAttribute("data-id")); });
+    });
+  }
+
+  function renderSquadTable(){
+    var head = document.getElementById("squadTableHead");
+    var body = document.getElementById("squadTableBody");
+    var posTh = state.showPositions ? '<th>포지션</th>' : '';
+    head.innerHTML = '<th>이름</th>'+posTh
+      + CATS.map(function(c){ return '<th class="num">'+c+'</th>'; }).join("")
+      + '<th class="num">총점</th>';
+
+    body.innerHTML = state.members.map(function(m){
+      var posTd = state.showPositions ? '<td>'+m.position+'</td>' : '';
+      var statTds = CATS.map(function(c){ return '<td class="num mono">'+m.stats[c]+'</td>'; }).join("");
+      return '<tr data-id="'+m.id+'"><td class="name">'+esc(m.name)+'</td>'+posTd+statTds
+        + '<td class="num total">'+totalScore(m)+'</td></tr>';
+    }).join("");
+
+    Array.prototype.forEach.call(body.querySelectorAll("tr"), function(row){
+      row.addEventListener("click", function(){ openPlayerModal(row.getAttribute("data-id")); });
+    });
+  }
+
+  function openPlayerModal(id){
+    var m = memberById(id);
+    if(!m) return;
+    modalDirty = false;
+    var modal = document.getElementById("playerModal");
+    var editable = state.adminMode;
+    var rowsHtml = CATS.map(function(c){
+      var v = m.stats[c];
+      if(editable){
+        return '<div class="stat-row"><label>'+c+'</label>'
+          + '<input type="range" min="1" max="'+MAX_STAT+'" step="1" value="'+v+'" data-cat="'+c+'">'
+          + '<div class="val mono" data-valfor="'+c+'">'+v+'</div></div>';
+      }
+      return '<div class="stat-row"><label>'+c+'</label>'
+        + '<div class="bar-track"><div class="bar-fill" style="width:'+(v/MAX_STAT*100)+'%"></div></div>'
+        + '<div class="val mono">'+v+'</div></div>';
+    }).join("");
+
+    var posLine = state.showPositions ? '<p class="eyebrow">'+esc(m.position)+'</p>' : '';
+    var nameHtml = editable
+      ? '<input type="text" class="name-edit" id="nameEditInput" value="'+esc(m.name)+'" maxlength="20" aria-label="이름 수정">'
+      : '<h2 style="margin:0;font-size:28px;">'+esc(m.name)+'</h2>';
+    modal.innerHTML =
+      '<div class="modal-head">'
+      + '<div>'+posLine+nameHtml+'</div>'
+      + '<button class="modal-close" id="closeModalBtn" aria-label="닫기">×</button>'
+      + '</div>'
+      + '<div class="radar-wrap">'+radarSVG(m.stats, 260)+'</div>'
+      + '<div style="text-align:center;color:var(--text-2);font-size:13px;margin-bottom:6px;">총점 <b class="mono" style="color:var(--text-1);font-size:16px;">'+totalScore(m)+'</b> / '+MAX_TOTAL
+      + (editable ? '' : '<br><span style="font-size:12px;">평가 수정은 운영진 모드에서 가능합니다</span>') + '</div>'
+      + '<div class="stat-rows">'+rowsHtml+'</div>';
+
+    document.getElementById("closeModalBtn").addEventListener("click", closePlayerModal);
+
+    if(editable){
+      var nameInput = document.getElementById("nameEditInput");
+      nameInput.addEventListener("input", function(){
+        m.name = nameInput.value;
+        saveState(); modalDirty = true; // local mirror only while the modal is open — see modalDirty note above
+        renderSquad();
+        renderAttendList();
+        renderTeamsResult();
+      });
+      nameInput.addEventListener("blur", function(){
+        if(!nameInput.value.trim()){
+          m.name = "이름 없음"; nameInput.value = m.name;
+          saveState(); modalDirty = true;
+          renderSquad(); renderAttendList(); renderTeamsResult();
+        }
+      });
+      Array.prototype.forEach.call(modal.querySelectorAll('input[type="range"]'), function(inp){
+        inp.addEventListener("input", function(){
+          var cat = inp.getAttribute("data-cat");
+          m.stats[cat] = parseInt(inp.value, 10);
+          modal.querySelector('[data-valfor="'+cat+'"]').textContent = inp.value;
+          modal.querySelector(".radar-wrap").innerHTML = radarSVG(m.stats, 260);
+          modal.querySelector(".radar-wrap + div b").textContent = totalScore(m);
+          saveState(); modalDirty = true; // local mirror only while the modal is open — see modalDirty note above
+          renderSquad();
+        });
+      });
+    }
+
+    document.getElementById("playerOverlay").classList.add("active");
+  }
+  function closePlayerModal(){
+    document.getElementById("playerOverlay").classList.remove("active");
+    var hadEdit = modalDirty;
+    if(modalDirty){
+      modalDirty = false;
+      schedulePersist(); // one shared-save for the whole editing session, now that nothing on-screen can be interrupted by the resulting reload
+    }
+    if(pendingRemoteState){
+      var pending = pendingRemoteState;
+      pendingRemoteState = null;
+      // if we just queued our own edit to be written out, skip applying this now-stale remote
+      // snapshot — our own write will land moments later and everyone (including this tab) will
+      // converge on it via the next onSnapshot delivery anyway
+      if(!hadEdit) applyRemoteState(pending);
+    }
+  }
+  document.getElementById("playerOverlay").addEventListener("click", function(e){
+    if(e.target.id === "playerOverlay") closePlayerModal();
+  });
+
+  function closeNotice(){ document.getElementById("noticeOverlay").classList.remove("active"); }
+  document.getElementById("noticeOverlay").addEventListener("click", function(e){
+    if(e.target.id === "noticeOverlay") closeNotice();
+  });
+  function showNotice(title, message){
+    var modal = document.getElementById("noticeModal");
+    modal.innerHTML = '<h2 style="margin:0 0 10px;font-size:22px;color:var(--warn);">'+title+'</h2>'
+      + '<p style="margin:0 0 20px;color:var(--text-2);font-size:14px;line-height:1.5;">'+message+'</p>'
+      + '<button class="btn btn-primary" id="noticeOkBtn" style="width:100%;">확인</button>';
+    document.getElementById("noticeOkBtn").addEventListener("click", closeNotice);
+    document.getElementById("noticeOverlay").classList.add("active");
+  }
+
+  var posSwitch = document.getElementById("posSwitch");
+  function setShowPositions(on){
+    state.showPositions = on;
+    posSwitch.classList.toggle("on", on);
+    posSwitch.setAttribute("aria-checked", on ? "true":"false");
+    schedulePersist();
+    renderSquad();
+    renderAttendList();
+    renderTeamsResult();
+  }
+  posSwitch.addEventListener("click", function(){ setShowPositions(!state.showPositions); });
+  posSwitch.addEventListener("keydown", function(e){
+    if(e.key === "Enter" || e.key === " "){ e.preventDefault(); setShowPositions(!state.showPositions); }
+  });
+
+  document.getElementById("squadViewSeg").addEventListener("click", function(e){
+    var btn = e.target.closest("button");
+    if(!btn) return;
+    Array.prototype.forEach.call(this.querySelectorAll("button"), function(b){ b.setAttribute("aria-pressed","false"); });
+    btn.setAttribute("aria-pressed","true");
+    state.squadView = btn.getAttribute("data-val");
+    schedulePersist();
+    renderSquad();
+  });
+
+  /* ---------------- Team builder ---------------- */
+  function renderAttendList(){
+    var list = document.getElementById("attendList");
+    var memberRows = state.members.map(function(m){
+      var checked = state.attendance[m.id] ? "checked" : "";
+      var posSuffix = state.showPositions ? ' · '+esc(m.position) : '';
+      return '<label class="attend-row"><input type="checkbox" data-id="'+m.id+'" '+checked+'>'
+        + '<span class="nm">'+esc(m.name)+'</span><span class="sc mono">'+totalScore(m)+'점'+posSuffix+'</span></label>';
+    }).join("");
+    var guestRows = state.guests.map(function(g){
+      var checked = state.attendance[g.id] ? "checked" : "";
+      return '<label class="attend-row guest-row"><input type="checkbox" data-id="'+g.id+'" '+checked+'>'
+        + '<span class="nm">'+esc(g.name)+'<span class="guest-badge">GUEST</span></span>'
+        + '<span class="sc mono">'+totalScore(g)+'점</span>'
+        + '<button type="button" class="attend-remove" data-guest-id="'+g.id+'" title="게스트 삭제" aria-label="게스트 삭제">×</button></label>';
+    }).join("");
+    list.innerHTML = memberRows + guestRows;
+
+    Array.prototype.forEach.call(list.querySelectorAll('input[type="checkbox"]'), function(cb){
+      cb.addEventListener("change", function(){
+        state.attendance[cb.getAttribute("data-id")] = cb.checked;
+        schedulePersist();
+        updateAttendCount();
+      });
+    });
+    Array.prototype.forEach.call(list.querySelectorAll(".attend-remove"), function(btn){
+      btn.addEventListener("click", function(e){
+        e.preventDefault();
+        removeGuest(btn.getAttribute("data-guest-id"));
+      });
+    });
+    updateAttendCount();
+  }
+  function updateAttendCount(){
+    var n = allPeople().filter(function(m){ return state.attendance[m.id]; }).length;
+    document.getElementById("attendCount").textContent = n;
+  }
+
+  var GUEST_DEFAULT_STAT = Math.round(MAX_STAT/2); // unknown ability — default keeps the total at 30 (5 x 6 categories)
+
+  function renderGuestStatsGrid(){
+    var grid = document.getElementById("guestStatsGrid");
+    grid.innerHTML = CATS.map(function(c, i){
+      return '<div class="guest-stat-field"><label>'+c+'</label>'
+        + '<input type="number" min="1" max="'+MAX_STAT+'" step="1" value="'+GUEST_DEFAULT_STAT+'" data-guest-cat="'+i+'" aria-label="게스트 '+c+' 점수"></div>';
+    }).join("");
+  }
+
+  var guestSeq = 0;
+  function addGuest(){
+    var input = document.getElementById("guestNameInput");
+    var name = input.value.trim();
+    if(!name){ input.focus(); return; }
+    guestSeq += 1;
+    var statInputs = document.querySelectorAll('#guestStatsGrid input[data-guest-cat]');
+    var stats = {};
+    CATS.forEach(function(c, i){
+      var raw = parseInt(statInputs[i].value, 10);
+      if(isNaN(raw)) raw = GUEST_DEFAULT_STAT;
+      stats[c] = Math.min(MAX_STAT, Math.max(1, raw));
+    });
+    var guest = { id: GUEST_PREFIX+Date.now()+"_"+guestSeq, name: name, position: "GUEST", stats: stats };
+    state.guests.push(guest);
+    state.attendance[guest.id] = true;
+    input.value = "";
+    renderGuestStatsGrid(); // reset the stat inputs back to the default 30-point baseline for the next guest
+    schedulePersist();
+    renderAttendList();
+  }
+  function removeGuest(id){
+    state.guests = state.guests.filter(function(g){ return g.id !== id; });
+    delete state.attendance[id];
+    schedulePersist();
+    renderAttendList();
+  }
+  document.getElementById("addGuestBtn").addEventListener("click", addGuest);
+  document.getElementById("guestNameInput").addEventListener("keydown", function(e){
+    if(e.key === "Enter"){ e.preventDefault(); addGuest(); }
+  });
+
+  document.getElementById("teamCountSeg").addEventListener("click", function(e){
+    var btn = e.target.closest("button");
+    if(!btn) return;
+    Array.prototype.forEach.call(this.querySelectorAll("button"), function(b){ b.setAttribute("aria-pressed","false"); });
+    btn.setAttribute("aria-pressed","true");
+    state.teamCount = parseInt(btn.getAttribute("data-val"),10);
+    schedulePersist();
+  });
+  document.getElementById("teamSizeSelect").addEventListener("change", function(){
+    state.teamSize = parseInt(this.value,10);
+    schedulePersist();
+  });
+
+  function buildTeams(){
+    var attendees = allPeople().filter(function(m){ return state.attendance[m.id]; });
+    if(attendees.length === 0){
+      showNotice("참석 인원이 없습니다", "참석 인원을 1명 이상 선택해주세요.");
+      return;
+    }
+    var n = state.teamCount;
+    var size = state.teamSize;
+    var needed = n * size;
+    var shortfall = Math.max(0, needed - attendees.length);
+
+    if(shortfall > 0){
+      var formatLabel = size+"vs"+size+" "+(n===2 ? "2파전" : "3파전");
+      showNotice(
+        "인원이 부족합니다",
+        "현재 기준 "+formatLabel+"은 인원이 부족합니다. (참석 "+attendees.length+"명 / 필요 "+needed+"명, "+shortfall+"명 부족)<br>부족한 자리는 팀별로 \"지원\" 슬롯으로 표시됩니다."
+      );
+    }
+
+    var sorted = attendees.slice().sort(function(a,b){ return totalScore(b) - totalScore(a); });
+    var teams = [];
+    for(var i=0;i<n;i++){ teams.push({ name:"팀 "+String.fromCharCode(65+i), memberIds:[] }); }
+
+    // snake draft: 1..n, n..1, 1..n, ...
+    var order = [];
+    var forward = true;
+    while(order.length < sorted.length){
+      var seq = [];
+      for(var t=0;t<n;t++) seq.push(t);
+      if(!forward) seq.reverse();
+      order = order.concat(seq);
+      forward = !forward;
+    }
+    sorted.forEach(function(m, idx){ teams[order[idx]].memberIds.push(m.id); });
+
+    // goalkeeper rotation queue per team: first two REAL roster members (by draft order) rotate as GK —
+    // captured before padding with reserve slots below, since a reserve slot can't be a goalkeeper
+    teams.forEach(function(team){
+      team.gkQueue = team.memberIds.slice(0, Math.min(2, team.memberIds.length));
+      if(team.gkQueue.length === 1) team.gkQueue.push(team.gkQueue[0]);
+    });
+
+    // pad each team up to the target team size with "지원" (reserve/idle-manpower) placeholder slots
+    teams.forEach(function(team, ti){
+      var missing = Math.max(0, size - team.memberIds.length);
+      for(var k=0;k<missing;k++){ team.memberIds.push(RESERVE_PREFIX+ti+"_"+k); }
+    });
+
+    state.teams = teams;
+    state.lastShortfall = shortfall;
+    schedulePersist();
+    renderTeamsResult();
+    renderMatchSetup();
+  }
+  document.getElementById("buildTeamsBtn").addEventListener("click", buildTeams);
+
+  function teamTotal(team){
+    return team.memberIds.reduce(function(s,id){
+      if(isReserve(id)) return s;
+      var m = memberById(id);
+      if(!m) return s;
+      return s + totalScore(m);
+    }, 0);
+  }
+
+  function renderTeamsResult(){
+    var wrap = document.getElementById("teamsResultWrap");
+    if(!state.teams){
+      wrap.innerHTML = '<div class="empty-hint">아직 편성된 팀이 없습니다. 왼쪽에서 참석 인원과 팀 구성을 정하고 "팀 생성"을 눌러보세요.</div>';
+      return;
+    }
+    var totals = state.teams.map(teamTotal);
+    var spread = Math.max.apply(null, totals) - Math.min.apply(null, totals);
+    var tier = spread <= 4 ? "good" : (spread <= 10 ? "warn" : "bad");
+    var tierLabel = spread <= 4 ? "밸런스 좋음" : (spread <= 10 ? "약간 차이" : "편차 큼");
+
+    var noticeHtml = (state.lastShortfall > 0)
+      ? '<div class="notice-banner show">참석 인원이 부족해 팀별로 "지원" 슬롯이 포함되어 있습니다. 추가 인원을 모집해주세요.</div>'
+      : "";
+
+    var cardsHtml = state.teams.map(function(team, i){
+      var rosterHtml = team.memberIds.map(function(id){
+        if(isReserve(id)){
+          return '<li class="reserve-li"><b>지원</b><span>모집중</span></li>';
+        }
+        var m = memberById(id);
+        if(!m) return '<li class="reserve-li"><b>탈퇴/삭제됨</b><span>—</span></li>';
+        var isGK = team.gkQueue.indexOf(id) !== -1;
+        return '<li><b>'+esc(m.name)+'</b><span>'+totalScore(m)+'점'+(isGK ? '<span class="gk-star">GK후보</span>' : '')+'</span></li>';
+      }).join("");
+      return '<div class="team-card">'
+        + '<div class="team-card-head"><h3>'+team.name+'</h3>'
+        + (i===0 ? '<span class="balance-pill balance-'+tier+'">'+tierLabel+' (편차 '+spread+')</span>' : '')
+        + '</div>'
+        + '<div class="team-total mono">'+totals[i]+'<small style="font-family:var(--font-body);font-size:12px;color:var(--text-3);"> 총합</small></div>'
+        + '<ul class="roster-mini">'+rosterHtml+'</ul>'
+        + '</div>';
+    }).join("");
+
+    wrap.innerHTML = noticeHtml + '<div class="teams-out">'+cardsHtml+'</div>'
+      + '<div style="margin-top:16px;text-align:right;"><button class="btn btn-primary" id="toMatchBtn">이 팀으로 매치 진행 →</button></div>';
+
+    document.getElementById("toMatchBtn").addEventListener("click", function(){
+      selectTab("match");
+    });
+  }
+
+  /* ---------------- Match day ---------------- */
+  var timer = { running:false, remaining:0, quarterIdx:0, quarterLen:15, quarterCount:2, gkSwitched:false, alertsFired:{}, intervalId:null };
+
+  function renderMatchSetup(){
+    var hasTeams = !!state.teams;
+    document.getElementById("matchNoTeams").style.display = hasTeams ? "none" : "block";
+    document.getElementById("matchReady").style.display = hasTeams ? "block" : "none";
+    if(!hasTeams) return;
+    renderRostersStrip();
+  }
+
+  function currentGK(team, quarterIdx){
+    if(!team.gkQueue || team.gkQueue.length === 0) return { before:null, after:null };
+    // one switch per quarter at the 7-minute mark → 2 keepers per quarter, continuing the rotation across quarters
+    var beforeSwitchIdx = (quarterIdx * 2) % team.gkQueue.length;
+    var afterSwitchIdx = (quarterIdx * 2 + 1) % team.gkQueue.length;
+    return { before: team.gkQueue[beforeSwitchIdx], after: team.gkQueue[afterSwitchIdx] };
+  }
+
+  function renderRostersStrip(){
+    var strip = document.getElementById("rostersStrip");
+    strip.innerHTML = state.teams.map(function(team){
+      var gk = currentGK(team, timer.quarterIdx);
+      var activeGkId = timer.gkSwitched ? gk.after : gk.before;
+      var items = team.memberIds.map(function(id){
+        if(isReserve(id)) return '<li class="reserve-li">지원 (모집중)</li>';
+        var m = memberById(id);
+        if(!m) return '<li class="reserve-li">탈퇴/삭제됨</li>';
+        var isActiveGK = id === activeGkId;
+        return '<li'+(isActiveGK ? ' class="current-gk"' : '')+'>'+esc(m.name)+(isActiveGK ? ' — 현재 GK' : '')+'</li>';
+      }).join("");
+      return '<div class="roster-strip-card"><h4>'+team.name+'</h4><ul>'+items+'</ul></div>';
+    }).join("");
+  }
+
+  function renderGkRow(){
+    var row = document.getElementById("gkRow");
+    row.innerHTML = state.teams.map(function(team){
+      var gk = currentGK(team, timer.quarterIdx);
+      var activeGkId = timer.gkSwitched ? gk.after : gk.before;
+      var m = activeGkId ? memberById(activeGkId) : null;
+      var name = m ? esc(m.name) : "미배정";
+      return '<div class="gk-chip"><div class="gk-badge">GK</div><div><div class="t">'+team.name+'</div><div class="n">'+name+'</div></div></div>';
+    }).join("");
+  }
+
+  function fmtClock(sec){
+    var m = Math.floor(sec/60), s = sec%60;
+    return (m<10?"0":"")+m+":"+(s<10?"0":"")+s;
+  }
+
+  var audioCtx = null;
+  function beep(freq, dur){
+    try{
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.frequency.value = freq;
+      osc.type = "sine";
+      gain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + dur);
+    }catch(e){ /* audio not available — visual alert still shows */ }
+  }
+
+  function showAlert(text, level){
+    var banner = document.getElementById("alertBanner");
+    banner.textContent = text;
+    banner.className = "alert-banner show alert-"+level;
+    beep(level === "critical" ? 880 : (level === "warn" ? 660 : 520), 0.35);
+    clearTimeout(showAlert._t);
+    showAlert._t = setTimeout(function(){ banner.classList.remove("show"); }, 4200);
+  }
+
+  function tick(){
+    timer.remaining -= 1;
+    var elapsed = timer.quarterLen*60 - timer.remaining;
+    var clockEl = document.getElementById("clockDisplay");
+    clockEl.textContent = fmtClock(Math.max(timer.remaining,0));
+    clockEl.className = "clock mono" + (timer.remaining <= 120 ? " critical" : (timer.remaining <= 300 ? " warn" : ""));
+
+    if(!timer.alertsFired.gk && elapsed >= 7*60){
+      timer.alertsFired.gk = true;
+      timer.gkSwitched = true;
+      renderGkRow();
+      renderRostersStrip();
+      showAlert("키퍼 교체! 7분 경과", "info");
+    }
+    if(!timer.alertsFired.five && timer.remaining <= 5*60){
+      timer.alertsFired.five = true;
+      showAlert("잔여 시간 5분", "warn");
+    }
+    if(!timer.alertsFired.two && timer.remaining <= 2*60){
+      timer.alertsFired.two = true;
+      showAlert("잔여 시간 2분", "warn");
+    }
+    if(!timer.alertsFired.last && timer.remaining <= 0){
+      timer.alertsFired.last = true;
+      showAlert("막공! 쿼터 종료", "critical");
+      nextQuarterOrEnd();
+    }
+  }
+
+  function startQuarter(){
+    timer.remaining = timer.quarterLen*60;
+    timer.gkSwitched = false;
+    timer.alertsFired = {};
+    document.getElementById("quarterLabel").textContent = (timer.quarterIdx+1)+"쿼터 / "+timer.quarterCount+"쿼터";
+    document.getElementById("clockDisplay").textContent = fmtClock(timer.remaining);
+    document.getElementById("clockDisplay").className = "clock mono";
+    renderGkRow();
+    renderRostersStrip();
+  }
+
+  function nextQuarterOrEnd(){
+    window.clearInterval(timer.intervalId);
+    timer.running = false;
+    if(timer.quarterIdx + 1 < timer.quarterCount){
+      setTimeout(function(){
+        timer.quarterIdx += 1;
+        startQuarter();
+        timer.intervalId = window.setInterval(tick, 1000);
+        timer.running = true;
+        document.getElementById("pauseBtn").textContent = "일시정지";
+      }, 3500);
+    }else{
+      setTimeout(function(){
+        showAlert("경기 종료 — 수고하셨습니다", "info");
+      }, 3500);
+    }
+  }
+
+  document.getElementById("startMatchBtn").addEventListener("click", function(){
+    timer.quarterLen = Math.max(5, parseInt(document.getElementById("quarterLenInput").value,10) || 15);
+    timer.quarterCount = Math.max(1, parseInt(document.getElementById("quarterCountInput").value,10) || 2);
+    timer.quarterIdx = 0;
+    document.getElementById("matchLive").style.display = "block";
+    document.getElementById("startMatchBtn").style.display = "none";
+    startQuarter();
+    timer.intervalId = window.setInterval(tick, 1000);
+    timer.running = true;
+  });
+
+  document.getElementById("pauseBtn").addEventListener("click", function(){
+    if(timer.running){
+      window.clearInterval(timer.intervalId);
+      timer.running = false;
+      this.textContent = "재개";
+    }else{
+      timer.intervalId = window.setInterval(tick, 1000);
+      timer.running = true;
+      this.textContent = "일시정지";
+    }
+  });
+
+  document.getElementById("endMatchBtn").addEventListener("click", function(){
+    window.clearInterval(timer.intervalId);
+    timer.running = false;
+    document.getElementById("matchLive").style.display = "none";
+    document.getElementById("startMatchBtn").style.display = "inline-block";
+    document.body.classList.remove("public-mode");
+    document.getElementById("publicToggleBtn").style.display = "inline-block";
+    document.getElementById("exitPublicBtn").style.display = "none";
+  });
+
+  document.getElementById("publicToggleBtn").addEventListener("click", function(){
+    document.body.classList.add("public-mode");
+    this.style.display = "none";
+    document.getElementById("exitPublicBtn").style.display = "inline-block";
+  });
+  document.getElementById("exitPublicBtn").addEventListener("click", function(){
+    document.body.classList.remove("public-mode");
+    this.style.display = "none";
+    document.getElementById("publicToggleBtn").style.display = "inline-block";
+  });
+
+  /* ---------------- Tabs / admin toggle / reset ---------------- */
+  function selectTab(name){
+    Array.prototype.forEach.call(document.querySelectorAll(".tab"), function(t){
+      t.setAttribute("aria-selected", t.getAttribute("data-panel") === name ? "true" : "false");
+    });
+    Array.prototype.forEach.call(document.querySelectorAll(".panel"), function(p){
+      p.classList.toggle("active", p.id === "panel-"+name);
+    });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll(".tab"), function(t){
+    t.addEventListener("click", function(){ selectTab(t.getAttribute("data-panel")); });
+  });
+
+  var adminSwitch = document.getElementById("adminSwitch");
+  function setAdmin(on){
+    state.adminMode = on;
+    adminSwitch.classList.toggle("on", on);
+    adminSwitch.setAttribute("aria-checked", on ? "true":"false");
+    schedulePersist();
+  }
+  adminSwitch.addEventListener("click", function(){ setAdmin(!state.adminMode); });
+  adminSwitch.addEventListener("keydown", function(e){
+    if(e.key === "Enter" || e.key === " "){ e.preventDefault(); setAdmin(!state.adminMode); }
+  });
+
+  document.getElementById("resetDemoBtn").addEventListener("click", function(){
+    if(!confirm("데모 데이터를 초기 상태로 되돌릴까요? 저장된 능력치·팀 편성이 모두 초기화됩니다.")) return;
+    try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
+    state = {
+      members: seedMembers(), attendance:{}, teamCount:2, teamSize:5, teams:null, adminMode:false,
+      showPositions:true, squadView:"card", lastShortfall:0, guests:[], seedVersion:SEED_VERSION
+    };
+    state.members.forEach(function(m){ state.attendance[m.id] = true; });
+    schedulePersist();
+    renderAll();
+  });
+
+  function renderAll(){
+    // resyncing UI controls from saved state below fires the same change/click handlers a real
+    // user action would — suppress network persists for this synchronous block so page load never
+    // triggers a publish, only saveState()'s local mirror does
+    suppressPersist = true;
+    renderGuestStatsGrid();
+    setAdmin(!!state.adminMode);
+    posSwitch.classList.toggle("on", state.showPositions);
+    posSwitch.setAttribute("aria-checked", state.showPositions ? "true":"false");
+    document.querySelector('#squadViewSeg button[data-val="'+state.squadView+'"]').setAttribute("aria-pressed","true");
+    document.querySelector('#squadViewSeg button[data-val="'+(state.squadView==="card"?"list":"card")+'"]').setAttribute("aria-pressed","false");
+    document.querySelector('#teamCountSeg button[data-val="'+state.teamCount+'"]').click();
+    document.getElementById("teamSizeSelect").value = state.teamSize;
+    suppressPersist = false;
+    renderSquad();
+    renderAttendList();
+    renderTeamsResult();
+    renderMatchSetup();
+  }
+
+  renderAll();
+})();
+</script>
+</body>
+</html>
