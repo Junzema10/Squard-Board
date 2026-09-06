@@ -227,7 +227,7 @@
   }
 
   /* ---------- Team builder ---------- */
-  .builder-grid{ display:grid; grid-template-columns:300px 1fr; gap:20px; align-items:start; }
+  .builder-grid{ display:grid; grid-template-columns:360px 1fr; gap:20px; align-items:start; }
   @media (max-width:860px){ .builder-grid{ grid-template-columns:1fr; } }
   .card{
     background:var(--bg-panel); border:1px solid var(--line); border-radius:12px; padding:18px 20px;
@@ -244,19 +244,22 @@
     width:100%; background:var(--bg-card); border:1px solid var(--line-strong); color:var(--text-1);
     padding:9px 10px; border-radius:7px; font-family:var(--font-mono); font-size:14px;
   }
-  .attend-list{ display:flex; flex-direction:column; gap:6px; max-height:280px; overflow-y:auto; padding-right:4px; }
-  .attend-row{ display:flex; align-items:center; gap:10px; font-size:13.5px; padding:6px 8px; border-radius:7px; }
-  .attend-row:hover{ background:rgba(255,255,255,0.03); }
-  .attend-row input{ accent-color:var(--accent); width:16px; height:16px; }
-  .attend-row .nm{ flex:1; font-weight:600; }
-  .attend-row .sc{ font-family:var(--font-mono); color:var(--text-3); font-size:12px; }
-  .attend-row.guest-row{ background:rgba(242,201,76,0.05); }
+  /* attendee list sized up ~120% over the original (font/padding/checkbox/gap) for easier tapping —
+     selectors scoped under .attend-list so this beats the ".field label{font-size:12px}" rule that
+     would otherwise win on specificity against a bare ".attend-row" (these rows are <label> tags) */
+  .attend-list{ display:flex; flex-direction:column; gap:7px; max-height:336px; overflow-y:auto; padding-right:4px; }
+  .attend-list .attend-row{ display:flex; align-items:center; gap:12px; font-size:16px; padding:8px 10px; border-radius:8px; }
+  .attend-list .attend-row:hover{ background:rgba(255,255,255,0.03); }
+  .attend-list .attend-row input{ accent-color:var(--accent); width:19px; height:19px; }
+  .attend-list .attend-row .nm{ flex:1; font-weight:600; }
+  .attend-list .attend-row .sc{ font-family:var(--font-mono); color:var(--text-3); font-size:14px; }
+  .attend-list .attend-row.guest-row{ background:rgba(242,201,76,0.05); }
   .guest-badge{
-    font-family:var(--font-mono); font-size:10px; font-weight:700; color:var(--gold); background:var(--gold-soft);
-    padding:2px 6px; border-radius:4px; letter-spacing:0.04em; margin-left:6px;
+    font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--gold); background:var(--gold-soft);
+    padding:2px 7px; border-radius:5px; letter-spacing:0.04em; margin-left:6px;
   }
   .attend-remove{
-    background:none; border:none; color:var(--text-3); font-size:16px; line-height:1; cursor:pointer; padding:2px 4px;
+    background:none; border:none; color:var(--text-3); font-size:19px; line-height:1; cursor:pointer; padding:2px 4px;
     flex:none;
   }
   .attend-remove:hover{ color:var(--critical); }
@@ -272,15 +275,23 @@
   }
 
   .teams-out{ display:grid; grid-template-columns:repeat(auto-fit, minmax(240px,1fr)); gap:14px; }
-  .team-card{ background:var(--bg-card); border:1px solid var(--line); border-radius:10px; padding:16px; }
-  .team-card-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .team-card{ background:var(--bg-card); border:1px solid var(--line); border-left:4px solid var(--line-strong); border-radius:10px; padding:16px; }
+  .team-card-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:10px; }
+  .team-card-head-left{ display:flex; align-items:center; gap:9px; min-width:0; }
   .team-card-head h3{ font-size:19px; margin:0; }
+  .team-color-dot{
+    width:18px; height:18px; border-radius:50%; border:2px solid rgba(255,255,255,0.5); flex:none;
+    box-shadow:0 0 0 1px rgba(0,0,0,0.25) inset;
+  }
+  .team-color-dot.pickable{ cursor:pointer; }
+  .team-color-dot.pickable:hover{ transform:scale(1.12); }
   .balance-pill{
     font-family:var(--font-mono); font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px;
   }
   .balance-good{ background:var(--good-soft); color:var(--good); }
   .balance-warn{ background:var(--warn-soft); color:var(--warn); }
   .balance-bad{ background:var(--critical-soft); color:var(--critical); }
+  .reshuffle-row{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
   .team-total{ font-family:var(--font-mono); font-size:28px; font-weight:600; margin-bottom:8px; }
   .roster-mini{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:5px; }
   .roster-mini li{ display:flex; justify-content:space-between; font-size:13px; color:var(--text-2); }
@@ -437,6 +448,7 @@
 
     <div class="builder-grid">
       <div class="card">
+        <button class="btn btn-primary" id="buildTeamsBtn" style="width:100%;margin-bottom:18px;">팀 생성</button>
         <div class="field">
           <label>팀 수</label>
           <div class="seg" id="teamCountSeg">
@@ -462,7 +474,6 @@
           <div class="guest-stats-grid" id="guestStatsGrid"></div>
           <button class="btn btn-sm" id="addGuestBtn" type="button" style="width:100%;margin-top:8px;">+ 게스트 추가</button>
         </div>
-        <button class="btn btn-primary" id="buildTeamsBtn" style="width:100%;">팀 생성</button>
       </div>
 
       <div id="teamsResultWrap">
@@ -1081,7 +1092,12 @@
     schedulePersist();
   });
 
-  function buildTeams(){
+  // real match-day jersey colors — teams get one of these round-robin when built, and admins can
+  // click a team's color dot to cycle to the next one (e.g. to match the actual pinnies worn that day)
+  var TEAM_COLORS = ["#ef4444", "#f2c94c", "#1a1a1a", "#39ff14", "#3fa9ff", "#ff8c42"];
+
+  function buildTeams(opts){
+    opts = opts || {};
     var attendees = allPeople().filter(function(m){ return state.attendance[m.id]; });
     if(attendees.length === 0){
       showNotice("참석 인원이 없습니다", "참석 인원을 1명 이상 선택해주세요.");
@@ -1101,8 +1117,25 @@
     }
 
     var sorted = attendees.slice().sort(function(a,b){ return totalScore(b) - totalScore(a); });
+
+    if(opts.shuffle){
+      // "재편성": keep the same overall skill ordering (so teams stay roughly balanced) but shuffle
+      // within each draft round (every n consecutive picks) so who lands on which team varies each
+      // time this is pressed, instead of always producing the exact same grouping
+      for(var start=0; start<sorted.length; start+=n){
+        var end = Math.min(start+n, sorted.length);
+        for(var i=end-1;i>start;i--){
+          var j = start + Math.floor(Math.random()*(i-start+1));
+          var tmp=sorted[i]; sorted[i]=sorted[j]; sorted[j]=tmp;
+        }
+      }
+    }
+
+    var prevColors = (state.teams || []).map(function(t){ return t.color; });
     var teams = [];
-    for(var i=0;i<n;i++){ teams.push({ name:"팀 "+String.fromCharCode(65+i), memberIds:[] }); }
+    for(var i=0;i<n;i++){
+      teams.push({ name:"팀 "+String.fromCharCode(65+i), memberIds:[], color: prevColors[i] || TEAM_COLORS[i % TEAM_COLORS.length] });
+    }
 
     // snake draft: 1..n, n..1, 1..n, ...
     var order = [];
@@ -1135,7 +1168,16 @@
     renderTeamsResult();
     renderMatchSetup();
   }
-  document.getElementById("buildTeamsBtn").addEventListener("click", buildTeams);
+  document.getElementById("buildTeamsBtn").addEventListener("click", function(){ buildTeams(); });
+
+  function cycleTeamColor(teamIdx){
+    if(!state.adminMode || !state.teams || !state.teams[teamIdx]) return;
+    var team = state.teams[teamIdx];
+    var curIdx = TEAM_COLORS.indexOf(team.color);
+    team.color = TEAM_COLORS[(curIdx + 1 + TEAM_COLORS.length) % TEAM_COLORS.length];
+    schedulePersist();
+    renderTeamsResult();
+  }
 
   function teamTotal(team){
     return team.memberIds.reduce(function(s,id){
@@ -1161,6 +1203,11 @@
       ? '<div class="notice-banner show">참석 인원이 부족해 팀별로 "지원" 슬롯이 포함되어 있습니다. 추가 인원을 모집해주세요.</div>'
       : "";
 
+    var reshuffleHtml = '<div class="reshuffle-row">'
+      + '<span class="balance-pill balance-'+tier+'">'+tierLabel+' (편차 '+spread+')</span>'
+      + (tier === "bad" ? '<button class="btn btn-sm" id="reshuffleBtn" type="button">🔀 재편성 (참석 인원 다시 랜덤 배치)</button>' : '')
+      + '</div>';
+
     var cardsHtml = state.teams.map(function(team, i){
       var rosterHtml = team.memberIds.map(function(id){
         if(isReserve(id)){
@@ -1171,20 +1218,35 @@
         var isGK = team.gkQueue.indexOf(id) !== -1;
         return '<li><b>'+esc(m.name)+'</b><span>'+totalScore(m)+'점'+(isGK ? '<span class="gk-star">GK후보</span>' : '')+'</span></li>';
       }).join("");
-      return '<div class="team-card">'
-        + '<div class="team-card-head"><h3>'+team.name+'</h3>'
-        + (i===0 ? '<span class="balance-pill balance-'+tier+'">'+tierLabel+' (편차 '+spread+')</span>' : '')
+      var color = team.color || TEAM_COLORS[i % TEAM_COLORS.length];
+      var dotClass = state.adminMode ? "team-color-dot pickable" : "team-color-dot";
+      var dotTitle = state.adminMode ? " title=\"클릭해서 팀 색상 변경\"" : "";
+      return '<div class="team-card" style="border-left-color:'+color+';">'
+        + '<div class="team-card-head">'
+        + '<div class="team-card-head-left">'
+        + '<span class="'+dotClass+'" data-team-idx="'+i+'" style="background:'+color+';"'+dotTitle+'></span>'
+        + '<h3>'+team.name+'</h3>'
+        + '</div>'
         + '</div>'
         + '<div class="team-total mono">'+totals[i]+'<small style="font-family:var(--font-body);font-size:12px;color:var(--text-3);"> 총합</small></div>'
         + '<ul class="roster-mini">'+rosterHtml+'</ul>'
         + '</div>';
     }).join("");
 
-    wrap.innerHTML = noticeHtml + '<div class="teams-out">'+cardsHtml+'</div>'
+    wrap.innerHTML = noticeHtml + reshuffleHtml + '<div class="teams-out">'+cardsHtml+'</div>'
       + '<div style="margin-top:16px;text-align:right;"><button class="btn btn-primary" id="toMatchBtn">이 팀으로 매치 진행 →</button></div>';
 
     document.getElementById("toMatchBtn").addEventListener("click", function(){
       selectTab("match");
+    });
+    var reshuffleBtn = document.getElementById("reshuffleBtn");
+    if(reshuffleBtn){
+      reshuffleBtn.addEventListener("click", function(){ buildTeams({ shuffle: true }); });
+    }
+    wrap.querySelectorAll(".team-color-dot.pickable").forEach(function(dot){
+      dot.addEventListener("click", function(){
+        cycleTeamColor(parseInt(dot.getAttribute("data-team-idx"), 10));
+      });
     });
   }
 
