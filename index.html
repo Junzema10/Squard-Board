@@ -176,10 +176,20 @@
   .player-score{ font-family:var(--font-mono); font-size:34px; font-weight:600; margin-top:10px; color:var(--text-1); }
   .player-score small{ font-family:var(--font-body); font-size:12px; color:var(--text-3); font-weight:600; margin-left:4px; }
   .mini-radar{ margin-top:8px; opacity:0.9; }
+  .withdrawn-tag{
+    font-family:var(--font-mono); font-size:11px; font-weight:700; color:var(--text-3);
+    background:rgba(148,175,214,0.12); padding:3px 7px; border-radius:5px; letter-spacing:0.04em; flex:none;
+  }
+  .player-card.withdrawn{ opacity:0.5; }
+  table.roster-table tr.withdrawn{ opacity:0.5; }
 
   .squad-controls{ display:flex; align-items:center; justify-content:flex-end; gap:18px; margin-bottom:16px; flex-wrap:wrap; }
   .squad-controls .seg{ width:auto; }
   .squad-controls .seg button{ flex:none; padding:7px 14px; }
+  /* admin-only "add member / show withdrawn" tools card above the squad grid — built dynamically
+     in JS (renderSquadAdminTools) so it can disappear entirely for non-admin viewers */
+  .squad-admin-card{ margin-bottom:16px; display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:14px 24px; }
+  .squad-admin-card .field{ margin-bottom:0; flex:1; min-width:240px; }
 
   .list-table-wrap{ overflow-x:auto; border:1px solid var(--line); border-radius:10px; }
   table.roster-table{ width:100%; border-collapse:collapse; font-size:13.5px; white-space:nowrap; }
@@ -217,6 +227,12 @@
   .modal-close:hover{ color:var(--text-1); }
   .radar-wrap{ display:flex; justify-content:center; margin:14px 0 6px; }
   .stat-rows{ display:flex; flex-direction:column; gap:10px; margin-top:10px; }
+  .modal-member-actions{
+    display:flex; gap:10px; margin-top:18px; padding-top:16px; border-top:1px solid var(--line);
+    flex-wrap:wrap; align-items:center;
+  }
+  .btn-danger{ border-color:rgba(239,68,68,0.5); color:#ff9d9d; }
+  .btn-danger:hover{ background:rgba(239,68,68,0.15); }
   .stat-row{ display:grid; grid-template-columns:64px 1fr 30px; align-items:center; gap:10px; }
   .stat-row label{ font-size:13px; color:var(--text-2); font-weight:600; }
   .stat-row .val{ font-family:var(--font-mono); text-align:right; color:var(--text-1); font-weight:600; }
@@ -304,6 +320,12 @@
   .roster-mini li .sc{ font-family:var(--font-mono); font-size:14px; color:var(--text-2); }
   .roster-mini li.reserve-li{ color:var(--text-3); font-style:italic; }
   .roster-mini li.reserve-li b{ color:var(--text-3); font-weight:600; }
+  /* admin-only fine-tune: tap a player, then tap a player on another team to swap their team
+     placement — keeps both teams' sizes exactly as they were (no drag-and-drop needed on mobile) */
+  .roster-mini li.swappable{ cursor:pointer; padding:4px 6px; margin:-4px -6px; border-radius:7px; transition:background .12s ease; }
+  .roster-mini li.swappable:hover{ background:rgba(255,255,255,0.05); }
+  .roster-mini li.swap-selected{ background:var(--accent-soft); outline:1px solid var(--accent); }
+  .swap-hint{ font-size:12.5px; color:var(--text-3); margin:-8px 0 14px; }
 
   .notice-banner{
     display:none; align-items:center; gap:10px; margin-bottom:14px; padding:12px 14px; border-radius:9px;
@@ -407,6 +429,8 @@
         <p>카드를 눌러 6개 항목 레이더와 상세 점수를 확인하세요. 능력치 수정은 운영진 모드에서만 가능합니다.</p>
       </div>
     </div>
+
+    <div class="squad-admin-tools" id="squadAdminTools"></div>
 
     <div class="squad-controls">
       <div class="admin-toggle">
@@ -551,6 +575,7 @@
   var GUEST_PREFIX = "GUEST_";
   function isReserve(id){ return typeof id === "string" && id.indexOf(RESERVE_PREFIX) === 0; }
   function isGuest(id){ return typeof id === "string" && id.indexOf(GUEST_PREFIX) === 0; }
+  function isActiveMember(m){ return !m.status || m.status === "active"; }
   function esc(s){
     return String(s).replace(/[&<>"']/g, function(c){
       return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
@@ -581,7 +606,7 @@
       // mid value (5/10, 30 total) until 운영진 enters real assessments in 운영진 모드
       var stats = {};
       CATS.forEach(function(c){ stats[c] = Math.round(MAX_STAT/2); });
-      return { id:"m"+(i+1), name:nm, position:pos, stats:stats };
+      return { id:"m"+(i+1), name:nm, position:pos, stats:stats, status:"active" };
     });
   }
 
@@ -634,6 +659,8 @@
   if(typeof state.showPositions !== "boolean") state.showPositions = true;
   if(state.squadView !== "card" && state.squadView !== "list") state.squadView = "card";
   if(!state.guests) state.guests = [];
+  // backfill for state saved before member status (active/withdrawn) existed
+  state.members.forEach(function(m){ if(!m.status) m.status = "active"; });
   saveState();
 
   /* ---------------- Shared cross-device persistence (Firebase Firestore) ---------------- */
@@ -810,6 +837,75 @@
   }
 
   /* ---------------- Squad panel ---------------- */
+  // "탈퇴 회원 보기" is a personal viewing toggle (not shared state) — only meaningful in 운영진 모드,
+  // and always off (i.e. withdrawn members hidden) for non-admin viewers regardless of this flag
+  var showWithdrawn = false;
+  var newMemberSeq = 0;
+
+  function visibleMembers(){
+    if(state.adminMode && showWithdrawn) return state.members;
+    return state.members.filter(isActiveMember);
+  }
+
+  function renderSquadAdminTools(){
+    var wrap = document.getElementById("squadAdminTools");
+    if(!state.adminMode){ wrap.innerHTML = ""; return; }
+    wrap.innerHTML =
+      '<div class="card squad-admin-card">'
+      + '<div class="field">'
+      + '<label>신규 회원 추가</label>'
+      + '<div class="guest-add-row">'
+      + '<input type="text" class="field-input" id="newMemberNameInput" placeholder="이름" maxlength="20" aria-label="신규 회원 이름">'
+      + '<select class="field-input" id="newMemberPosSelect" style="max-width:96px;flex:none;" aria-label="신규 회원 포지션">'
+      + '<option value="FW">FW</option><option value="MF">MF</option><option value="DF">DF</option><option value="GK">GK</option>'
+      + '</select>'
+      + '<button class="btn btn-sm" id="addMemberBtn" type="button">+ 추가</button>'
+      + '</div>'
+      + '</div>'
+      + '<div class="admin-toggle">'
+      + '탈퇴 회원 보기'
+      + '<div class="switch'+(showWithdrawn?" on":"")+'" id="showWithdrawnSwitch" role="switch" aria-checked="'+(showWithdrawn?"true":"false")+'" tabindex="0"></div>'
+      + '</div>'
+      + '</div>';
+
+    document.getElementById("addMemberBtn").addEventListener("click", addMember);
+    document.getElementById("newMemberNameInput").addEventListener("keydown", function(e){
+      if(e.key === "Enter"){ e.preventDefault(); addMember(); }
+    });
+    var swEl = document.getElementById("showWithdrawnSwitch");
+    function toggleShowWithdrawn(){
+      showWithdrawn = !showWithdrawn;
+      swEl.classList.toggle("on", showWithdrawn);
+      swEl.setAttribute("aria-checked", showWithdrawn ? "true" : "false");
+      renderSquad();
+    }
+    swEl.addEventListener("click", toggleShowWithdrawn);
+    swEl.addEventListener("keydown", function(e){
+      if(e.key === "Enter" || e.key === " "){ e.preventDefault(); toggleShowWithdrawn(); }
+    });
+  }
+
+  function addMember(){
+    if(!state.adminMode) return;
+    var nameInput = document.getElementById("newMemberNameInput");
+    var posSelect = document.getElementById("newMemberPosSelect");
+    var name = nameInput.value.trim();
+    if(!name){ nameInput.focus(); return; }
+    newMemberSeq += 1;
+    // new real members start at the same neutral mid-value baseline as the seed roster — no
+    // invented ability judgments until 운영진 opens their card in 운영진 모드 and sets real scores
+    var stats = {};
+    CATS.forEach(function(c){ stats[c] = Math.round(MAX_STAT/2); });
+    var member = { id:"m"+Date.now()+"_"+newMemberSeq, name:name, position:posSelect.value, stats:stats, status:"active" };
+    state.members.push(member);
+    state.attendance[member.id] = true;
+    nameInput.value = "";
+    posSelect.value = "FW";
+    schedulePersist();
+    renderSquad();
+    renderAttendList();
+  }
+
   function renderSquad(){
     var gridWrap = document.getElementById("squadGrid");
     var listWrap = document.getElementById("squadListWrap");
@@ -823,11 +919,14 @@
     gridWrap.style.display = "grid";
     listWrap.style.display = "none";
 
-    gridWrap.innerHTML = state.members.map(function(m){
+    var visible = visibleMembers();
+    gridWrap.innerHTML = visible.map(function(m){
+      var withdrawn = m.status === "withdrawn";
       var posTag = state.showPositions
         ? '<span class="pos-tag pos-'+m.position+'">'+m.position+'</span>' : '';
-      return '<article class="player-card" data-id="'+m.id+'">'
-        + '<div class="player-top"><div class="player-name">'+esc(m.name)+'</div>'+posTag+'</div>'
+      var tag = withdrawn ? '<span class="withdrawn-tag">탈퇴</span>' : posTag;
+      return '<article class="player-card'+(withdrawn?" withdrawn":"")+'" data-id="'+m.id+'">'
+        + '<div class="player-top"><div class="player-name">'+esc(m.name)+'</div>'+tag+'</div>'
         + '<div class="player-score">'+totalScore(m)+'<small>/ '+MAX_TOTAL+' 총점</small></div>'
         + '<div class="mini-radar">'+radarSVG(m.stats, 96, {mini:true, pad:10})+'</div>'
         + '</article>';
@@ -846,10 +945,12 @@
       + CATS.map(function(c){ return '<th class="num">'+c+'</th>'; }).join("")
       + '<th class="num">총점</th>';
 
-    body.innerHTML = state.members.map(function(m){
+    body.innerHTML = visibleMembers().map(function(m){
+      var withdrawn = m.status === "withdrawn";
       var posTd = state.showPositions ? '<td>'+m.position+'</td>' : '';
       var statTds = CATS.map(function(c){ return '<td class="num mono">'+m.stats[c]+'</td>'; }).join("");
-      return '<tr data-id="'+m.id+'"><td class="name">'+esc(m.name)+'</td>'+posTd+statTds
+      var nameHtml = esc(m.name) + (withdrawn ? ' <span class="withdrawn-tag">탈퇴</span>' : '');
+      return '<tr data-id="'+m.id+'"'+(withdrawn?' class="withdrawn"':'')+'><td class="name">'+nameHtml+'</td>'+posTd+statTds
         + '<td class="num total">'+totalScore(m)+'</td></tr>';
     }).join("");
 
@@ -880,6 +981,25 @@
     var nameHtml = editable
       ? '<input type="text" class="name-edit" id="nameEditInput" value="'+esc(m.name)+'" maxlength="20" aria-label="이름 수정">'
       : '<h2 style="margin:0;font-size:28px;">'+esc(m.name)+'</h2>';
+
+    // admin-only member management: withdraw (soft, reversible) / reactivate / permanently delete.
+    // guests and reserve slots never reach this modal (squad grid only lists real state.members),
+    // but the isGuest() guard is kept defensive in case that ever changes.
+    var manageHtml = "";
+    if(editable && !isGuest(m.id)){
+      if(m.status === "withdrawn"){
+        manageHtml = '<div class="modal-member-actions">'
+          + '<span class="withdrawn-tag">탈퇴 회원</span>'
+          + '<button class="btn btn-sm" id="reactivateMemberBtn" type="button">복귀 처리</button>'
+          + '<button class="btn btn-sm btn-danger" id="deleteMemberBtn" type="button">완전 삭제</button>'
+          + '</div>';
+      } else {
+        manageHtml = '<div class="modal-member-actions">'
+          + '<button class="btn btn-sm btn-danger" id="withdrawMemberBtn" type="button">탈퇴 처리</button>'
+          + '</div>';
+      }
+    }
+
     modal.innerHTML =
       '<div class="modal-head">'
       + '<div>'+posLine+nameHtml+'</div>'
@@ -888,9 +1008,45 @@
       + '<div class="radar-wrap">'+radarSVG(m.stats, 260)+'</div>'
       + '<div style="text-align:center;color:var(--text-2);font-size:13px;margin-bottom:6px;">총점 <b class="mono" style="color:var(--text-1);font-size:16px;">'+totalScore(m)+'</b> / '+MAX_TOTAL
       + (editable ? '' : '<br><span style="font-size:12px;">평가 수정은 운영진 모드에서 가능합니다</span>') + '</div>'
-      + '<div class="stat-rows">'+rowsHtml+'</div>';
+      + '<div class="stat-rows">'+rowsHtml+'</div>'
+      + manageHtml;
 
     document.getElementById("closeModalBtn").addEventListener("click", closePlayerModal);
+
+    if(editable && !isGuest(m.id)){
+      var withdrawBtn = document.getElementById("withdrawMemberBtn");
+      if(withdrawBtn){
+        withdrawBtn.addEventListener("click", function(){
+          if(!confirm(m.name+" 회원을 탈퇴 처리할까요?\n오늘 참석 목록에서 제외되고 스쿼드 목록에서도 숨겨집니다. (운영진 모드의 '탈퇴 회원 보기'에서 다시 확인하거나 복귀시킬 수 있습니다)")) return;
+          m.status = "withdrawn";
+          state.attendance[m.id] = false;
+          modalDirty = true;
+          closePlayerModal();
+          renderSquad(); renderAttendList(); renderTeamsResult();
+        });
+      }
+      var reactivateBtn = document.getElementById("reactivateMemberBtn");
+      if(reactivateBtn){
+        reactivateBtn.addEventListener("click", function(){
+          if(!confirm(m.name+" 회원을 다시 활동 회원으로 복귀시킬까요?")) return;
+          m.status = "active";
+          modalDirty = true;
+          closePlayerModal();
+          renderSquad(); renderAttendList(); renderTeamsResult();
+        });
+      }
+      var deleteBtn = document.getElementById("deleteMemberBtn");
+      if(deleteBtn){
+        deleteBtn.addEventListener("click", function(){
+          if(!confirm(m.name+" 회원을 완전히 삭제할까요?\n이 작업은 되돌릴 수 없습니다. (과거 팀 편성 기록에는 '탈퇴/삭제됨'으로 표시됩니다)")) return;
+          state.members = state.members.filter(function(x){ return x.id !== m.id; });
+          delete state.attendance[m.id];
+          modalDirty = true;
+          closePlayerModal();
+          renderSquad(); renderAttendList(); renderTeamsResult();
+        });
+      }
+    }
 
     if(editable){
       var nameInput = document.getElementById("nameEditInput");
@@ -984,7 +1140,7 @@
   /* ---------------- Team builder ---------------- */
   function renderAttendList(){
     var list = document.getElementById("attendList");
-    var memberRows = state.members.map(function(m){
+    var memberRows = state.members.filter(isActiveMember).map(function(m){
       var checked = state.attendance[m.id] ? "checked" : "";
       var posSuffix = state.showPositions ? ' · '+esc(m.position) : '';
       return '<label class="attend-row"><input type="checkbox" data-id="'+m.id+'" '+checked+'>'
@@ -1078,8 +1234,13 @@
   // click a team's color dot to cycle to the next one (e.g. to match the actual pinnies worn that day)
   var TEAM_COLORS = ["#ef4444", "#f2c94c", "#1a1a1a", "#39ff14", "#3fa9ff", "#ff8c42"];
 
+  // admin-only roster fine-tune: { teamIdx, slotIdx } of the currently tapped slot, waiting for a
+  // second tap on a different team to swap with — not persisted, purely a local UI selection
+  var swapSelection = null;
+
   function buildTeams(opts){
     opts = opts || {};
+    swapSelection = null; // slot indices from the previous team layout are no longer meaningful
     var attendees = allPeople().filter(function(m){ return state.attendance[m.id]; });
     if(attendees.length === 0){
       showNotice("참석 인원이 없습니다", "참석 인원을 1명 이상 선택해주세요.");
@@ -1182,18 +1343,28 @@
       + '<span class="balance-pill balance-'+tier+'">'+tierLabel+' (편차 '+spread+')</span>'
       + (tier === "bad" ? '<button class="btn btn-sm" id="reshuffleBtn" type="button">🔀 재편성 (참석 인원 다시 랜덤 배치)</button>' : '')
       + '</div>';
+    var swapHintHtml = state.adminMode
+      ? '<p class="swap-hint">회원을 탭한 뒤 다른 팀의 회원을 탭하면 두 사람의 자리가 서로 바뀝니다 (밸런스 파인튠).</p>'
+      : '';
 
     var cardsHtml = state.teams.map(function(team, i){
       // sequential number on the left of each roster row — reserved for the club's goal-triggered
       // keeper rotation order (다음 골 실점/득점 시 이 순서대로 키퍼 교체), not used for that yet
       var rosterHtml = team.memberIds.map(function(id, idx){
         var num = '<span class="roster-num">'+(idx+1)+'</span>';
+        var selected = swapSelection && swapSelection.teamIdx === i && swapSelection.slotIdx === idx;
+        var slotAttrs = ' data-team-idx="'+i+'" data-slot-idx="'+idx+'"';
         if(isReserve(id)){
-          return '<li class="reserve-li">'+num+'<b>지원</b><span class="sc">모집중</span></li>';
+          var swapClass = state.adminMode ? " swappable" : "";
+          return '<li class="reserve-li'+swapClass+(selected?" swap-selected":"")+'"'+(state.adminMode?slotAttrs:'')+'>'+num+'<b>지원</b><span class="sc">모집중</span></li>';
         }
         var m = memberById(id);
-        if(!m) return '<li class="reserve-li">'+num+'<b>탈퇴/삭제됨</b><span class="sc">—</span></li>';
-        return '<li>'+num+'<b>'+esc(m.name)+'</b><span class="sc">'+totalScore(m)+'점</span></li>';
+        if(!m){
+          var swapClass2 = state.adminMode ? " swappable" : "";
+          return '<li class="reserve-li'+swapClass2+(selected?" swap-selected":"")+'"'+(state.adminMode?slotAttrs:'')+'>'+num+'<b>탈퇴/삭제됨</b><span class="sc">—</span></li>';
+        }
+        var swapClass3 = state.adminMode ? " swappable" : "";
+        return '<li class="'+swapClass3.trim()+(selected?" swap-selected":"")+'"'+(state.adminMode?slotAttrs:'')+'>'+num+'<b>'+esc(m.name)+'</b><span class="sc">'+totalScore(m)+'점</span></li>';
       }).join("");
       var color = team.color || TEAM_COLORS[i % TEAM_COLORS.length];
       var dotClass = state.adminMode ? "team-color-dot pickable" : "team-color-dot";
@@ -1210,7 +1381,7 @@
         + '</div>';
     }).join("");
 
-    wrap.innerHTML = noticeHtml + reshuffleHtml + '<div class="teams-out">'+cardsHtml+'</div>'
+    wrap.innerHTML = noticeHtml + reshuffleHtml + swapHintHtml + '<div class="teams-out">'+cardsHtml+'</div>'
       + '<div style="margin-top:16px;text-align:right;"><button class="btn btn-primary" id="toMatchBtn">이 팀으로 매치 진행 →</button></div>';
 
     document.getElementById("toMatchBtn").addEventListener("click", function(){
@@ -1218,13 +1389,52 @@
     });
     var reshuffleBtn = document.getElementById("reshuffleBtn");
     if(reshuffleBtn){
-      reshuffleBtn.addEventListener("click", function(){ buildTeams({ shuffle: true }); });
+      reshuffleBtn.addEventListener("click", function(){ swapSelection = null; buildTeams({ shuffle: true }); });
     }
     wrap.querySelectorAll(".team-color-dot.pickable").forEach(function(dot){
       dot.addEventListener("click", function(){
         cycleTeamColor(parseInt(dot.getAttribute("data-team-idx"), 10));
       });
     });
+    if(state.adminMode){
+      wrap.querySelectorAll(".roster-mini li.swappable").forEach(function(li){
+        li.addEventListener("click", function(){
+          onRosterSlotClick(parseInt(li.getAttribute("data-team-idx"),10), parseInt(li.getAttribute("data-slot-idx"),10));
+        });
+      });
+    }
+  }
+
+  // tap-to-swap fine-tuning: first tap arms a slot, a second tap on a DIFFERENT team's slot swaps
+  // the two ids in place (team sizes never change), a second tap on the SAME slot cancels, and a
+  // tap on another slot within the SAME team just re-arms that slot instead
+  function onRosterSlotClick(teamIdx, slotIdx){
+    if(!state.adminMode || !state.teams) return;
+    if(!swapSelection){
+      swapSelection = { teamIdx: teamIdx, slotIdx: slotIdx };
+      renderTeamsResult();
+      return;
+    }
+    if(swapSelection.teamIdx === teamIdx && swapSelection.slotIdx === slotIdx){
+      swapSelection = null;
+      renderTeamsResult();
+      return;
+    }
+    if(swapSelection.teamIdx === teamIdx){
+      swapSelection = { teamIdx: teamIdx, slotIdx: slotIdx };
+      renderTeamsResult();
+      return;
+    }
+    var teamA = state.teams[swapSelection.teamIdx];
+    var teamB = state.teams[teamIdx];
+    var idA = teamA.memberIds[swapSelection.slotIdx];
+    var idB = teamB.memberIds[slotIdx];
+    teamA.memberIds[swapSelection.slotIdx] = idB;
+    teamB.memberIds[slotIdx] = idA;
+    swapSelection = null;
+    schedulePersist();
+    renderTeamsResult();
+    renderMatchSetup(); // keep the match-day roster strip (if a match is already set up) in sync
   }
 
   /* ---------------- Match day ---------------- */
@@ -1395,7 +1605,11 @@
     state.adminMode = on;
     adminSwitch.classList.toggle("on", on);
     adminSwitch.setAttribute("aria-checked", on ? "true":"false");
+    swapSelection = null;
     schedulePersist();
+    renderSquadAdminTools();
+    renderSquad(); // re-apply the withdrawn-member filter immediately (non-admins never see them)
+    renderTeamsResult(); // re-apply admin-only controls (swap-to-fine-tune, color dots) immediately
   }
   adminSwitch.addEventListener("click", function(){ setAdmin(!state.adminMode); });
   adminSwitch.addEventListener("keydown", function(e){
