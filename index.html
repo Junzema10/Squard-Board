@@ -225,6 +225,12 @@
   .name-edit:focus{ outline:none; border-bottom-color:var(--accent); }
   .modal-close{ background:none; border:none; color:var(--text-2); font-size:22px; cursor:pointer; line-height:1; padding:2px 6px; }
   .modal-close:hover{ color:var(--text-1); }
+  .pin-input{
+    width:100%; text-align:center; font-size:26px; letter-spacing:14px; font-family:var(--font-mono);
+    padding:12px 10px 12px 24px; /* extra left padding roughly balances the trailing letter-spacing gap */
+    background:var(--bg-card); border:1px solid var(--line-strong); border-radius:8px; color:var(--text-1);
+  }
+  .pin-input:focus{ outline:none; border-color:var(--accent); }
   .radar-wrap{ display:flex; justify-content:center; margin:14px 0 6px; }
   .stat-rows{ display:flex; flex-direction:column; gap:10px; margin-top:10px; }
   .modal-member-actions{
@@ -308,6 +314,10 @@
   .balance-warn{ background:var(--warn-soft); color:var(--warn); }
   .balance-bad{ background:var(--critical-soft); color:var(--critical); }
   .reshuffle-row{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
+  /* "점수 표시" toggle above the built teams — off hides every point value so the formation can be
+     shared without exposing individual scores; this is shared state, same as 포지션 표시 */
+  .builder-controls{ display:flex; justify-content:flex-end; margin-bottom:12px; }
+  .score-hidden-label{ color:var(--text-3); font-weight:600; }
   .team-total{ font-family:var(--font-mono); font-size:28px; font-weight:600; margin-bottom:8px; }
   /* roster list sized up ~120% over the original, with a sequential number on the left of each
      name — reserved for the club's goal-triggered keeper rotation order (다음 기능) */
@@ -562,6 +572,11 @@
   <div class="modal" id="noticeModal" style="max-width:420px;text-align:center;"></div>
 </div>
 
+<!-- Admin PIN entry (shown when turning 운영진 모드 on) -->
+<div class="overlay" id="adminPinOverlay">
+  <div class="modal" id="adminPinModal" style="max-width:340px;text-align:center;"></div>
+</div>
+
 <script id="stateData" type="application/json">{"members":[{"id":"m1","name":"이준영","position":"FW","stats":{"슈팅":7,"수비":5,"스피드":6,"드리블":7,"체력":5,"패스":8}},{"id":"m2","name":"전준모","position":"MF","stats":{"슈팅":6,"수비":7,"스피드":5,"드리블":8,"체력":6,"패스":7}},{"id":"m3","name":"안교형","position":"DF","stats":{"슈팅":7,"수비":4,"스피드":4,"드리블":8,"체력":4,"패스":7}},{"id":"m4","name":"홍광락","position":"FW","stats":{"슈팅":8,"수비":5,"스피드":7,"드리블":7,"체력":6,"패스":5}},{"id":"m5","name":"임정빈","position":"GK","stats":{"슈팅":4,"수비":3,"스피드":6,"드리블":4,"체력":6,"패스":3}},{"id":"m6","name":"김홍준","position":"DF","stats":{"슈팅":4,"수비":6,"스피드":5,"드리블":3,"체력":5,"패스":5}},{"id":"m7","name":"김춘추","position":"FW","stats":{"슈팅":4,"수비":6,"스피드":5,"드리블":6,"체력":5,"패스":4}},{"id":"m8","name":"마엘","position":"MF","stats":{"슈팅":7,"수비":6,"스피드":8,"드리블":7,"체력":6,"패스":5}},{"id":"m9","name":"박민우","position":"DF","stats":{"슈팅":7,"수비":6,"스피드":8,"드리블":6,"체력":7,"패스":6}},{"id":"m10","name":"서정화","position":"FW","stats":{"슈팅":7,"수비":6,"스피드":6,"드리블":7,"체력":6,"패스":6}},{"id":"m11","name":"서경동","position":"MF","stats":{"슈팅":6,"수비":7,"스피드":4,"드리블":5,"체력":6,"패스":5}},{"id":"m12","name":"정병수","position":"DF","stats":{"슈팅":4,"수비":6,"스피드":3,"드리블":4,"체력":8,"패스":3}},{"id":"m13","name":"채진경","position":"FW","stats":{"슈팅":9,"수비":6,"스피드":7,"드리블":8,"체력":6,"패스":7}},{"id":"m14","name":"장인희","position":"MF","stats":{"슈팅":7,"수비":5,"스피드":6,"드리블":7,"체력":5,"패스":5}},{"id":"m15","name":"김지섭","position":"GK","stats":{"슈팅":6,"수비":4,"스피드":4,"드리블":6,"체력":3,"패스":5}},{"id":"m16","name":"박재주","position":"FW","stats":{"슈팅":8,"수비":5,"스피드":6,"드리블":7,"체력":6,"패스":6}},{"id":"m17","name":"차상원","position":"MF","stats":{"슈팅":9,"수비":6,"스피드":7,"드리블":7,"체력":6,"패스":7}},{"id":"m18","name":"도솔","position":"DF","stats":{"슈팅":8,"수비":6,"스피드":6,"드리블":8,"체력":7,"패스":7}}],"attendance":{"m1":true,"m2":true,"m3":true,"m4":true,"m5":true,"m6":true,"m7":true,"m8":true,"m9":true,"m10":true,"m11":true,"m12":true,"m13":true,"m14":true,"m15":true,"m16":true,"m17":true,"m18":true},"teamCount":2,"teamSize":5,"teams":[{"name":"팀 A","memberIds":["m2","m4","m5","m8","m9","m12","m13","m16","m17"]},{"name":"팀 B","memberIds":["m1","m3","m6","m7","m10","m11","m14","m15","m18"]}],"adminMode":true,"showPositions":false,"squadView":"list","guests":[],"lastShortfall":0,"seedVersion":2}</script>
 <script id="mainScript">
 (function(){
@@ -636,6 +651,7 @@
     teams: null,      // array of {name, memberIds}
     adminMode: false,
     showPositions: true,
+    showScores: true,
     squadView: "card",
     lastShortfall: 0,
     guests: [],
@@ -657,6 +673,7 @@
     state.members.forEach(function(m){ state.attendance[m.id] = true; });
   }
   if(typeof state.showPositions !== "boolean") state.showPositions = true;
+  if(typeof state.showScores !== "boolean") state.showScores = true;
   if(state.squadView !== "card" && state.squadView !== "list") state.squadView = "card";
   if(!state.guests) state.guests = [];
   // backfill for state saved before member status (active/withdrawn) existed
@@ -1112,6 +1129,58 @@
     document.getElementById("noticeOverlay").classList.add("active");
   }
 
+  /* ---------------- Admin PIN gate ---------------- */
+  // Turning 운영진 모드 ON requires this 4-digit PIN (turning it off never does). This is a soft,
+  // client-side deterrent only — it's visible to anyone who reads this page's source, and the
+  // Firestore write rules stay open to anyone with the link regardless, so it keeps casual members
+  // from flipping the switch by accident rather than acting as real access control.
+  var ADMIN_PIN = "2224";
+
+  function closeAdminPin(){ document.getElementById("adminPinOverlay").classList.remove("active"); }
+  document.getElementById("adminPinOverlay").addEventListener("click", function(e){
+    if(e.target.id === "adminPinOverlay") closeAdminPin();
+  });
+
+  function openAdminPinPrompt(){
+    var modal = document.getElementById("adminPinModal");
+    modal.innerHTML =
+      '<div class="modal-head" style="justify-content:flex-end;">'
+      + '<button class="modal-close" id="adminPinCloseBtn" aria-label="닫기">×</button>'
+      + '</div>'
+      + '<h2 style="margin:0 0 6px;font-size:20px;">운영진 모드 비밀번호</h2>'
+      + '<p style="margin:0 0 18px;color:var(--text-2);font-size:13px;">4자리 숫자를 입력하세요.</p>'
+      + '<input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" class="pin-input" id="adminPinInput" autocomplete="off" aria-label="운영진 비밀번호">'
+      + '<div id="adminPinError" style="display:none;color:var(--critical);font-size:12.5px;margin-top:10px;">비밀번호가 올바르지 않습니다.</div>'
+      + '<button class="btn btn-primary" id="adminPinSubmitBtn" style="width:100%;margin-top:16px;">확인</button>';
+
+    var input = document.getElementById("adminPinInput");
+    var errEl = document.getElementById("adminPinError");
+
+    function tryUnlock(){
+      if(input.value === ADMIN_PIN){
+        closeAdminPin();
+        setAdmin(true);
+      } else {
+        errEl.style.display = "block";
+        input.value = "";
+        input.focus();
+      }
+    }
+
+    document.getElementById("adminPinCloseBtn").addEventListener("click", closeAdminPin);
+    document.getElementById("adminPinSubmitBtn").addEventListener("click", tryUnlock);
+    input.addEventListener("keydown", function(e){
+      if(e.key === "Enter"){ e.preventDefault(); tryUnlock(); }
+    });
+    input.addEventListener("input", function(){
+      input.value = input.value.replace(/[^0-9]/g, "").slice(0, 4);
+      errEl.style.display = "none";
+    });
+
+    document.getElementById("adminPinOverlay").classList.add("active");
+    setTimeout(function(){ input.focus(); }, 50);
+  }
+
   var posSwitch = document.getElementById("posSwitch");
   function setShowPositions(on){
     state.showPositions = on;
@@ -1339,8 +1408,14 @@
       ? '<div class="notice-banner show">참석 인원이 부족해 팀별로 "지원" 슬롯이 포함되어 있습니다. 추가 인원을 모집해주세요.</div>'
       : "";
 
+    var controlsHtml = '<div class="builder-controls"><div class="admin-toggle">'
+      + '점수 표시'
+      + '<div class="switch'+(state.showScores?" on":"")+'" id="showScoresSwitch" role="switch" aria-checked="'+(state.showScores?"true":"false")+'" tabindex="0"></div>'
+      + '</div></div>';
+
+    var spreadSuffix = state.showScores ? ' (편차 '+spread+')' : '';
     var reshuffleHtml = '<div class="reshuffle-row">'
-      + '<span class="balance-pill balance-'+tier+'">'+tierLabel+' (편차 '+spread+')</span>'
+      + '<span class="balance-pill balance-'+tier+'">'+tierLabel+spreadSuffix+'</span>'
       + (tier === "bad" ? '<button class="btn btn-sm" id="reshuffleBtn" type="button">🔀 재편성 (참석 인원 다시 랜덤 배치)</button>' : '')
       + '</div>';
     var swapHintHtml = state.adminMode
@@ -1356,19 +1431,25 @@
         var slotAttrs = ' data-team-idx="'+i+'" data-slot-idx="'+idx+'"';
         if(isReserve(id)){
           var swapClass = state.adminMode ? " swappable" : "";
-          return '<li class="reserve-li'+swapClass+(selected?" swap-selected":"")+'"'+(state.adminMode?slotAttrs:'')+'>'+num+'<b>지원</b><span class="sc">모집중</span></li>';
+          var sc0 = state.showScores ? '<span class="sc">모집중</span>' : '';
+          return '<li class="reserve-li'+swapClass+(selected?" swap-selected":"")+'"'+(state.adminMode?slotAttrs:'')+'>'+num+'<b>지원</b>'+sc0+'</li>';
         }
         var m = memberById(id);
         if(!m){
           var swapClass2 = state.adminMode ? " swappable" : "";
-          return '<li class="reserve-li'+swapClass2+(selected?" swap-selected":"")+'"'+(state.adminMode?slotAttrs:'')+'>'+num+'<b>탈퇴/삭제됨</b><span class="sc">—</span></li>';
+          var sc1 = state.showScores ? '<span class="sc">—</span>' : '';
+          return '<li class="reserve-li'+swapClass2+(selected?" swap-selected":"")+'"'+(state.adminMode?slotAttrs:'')+'>'+num+'<b>탈퇴/삭제됨</b>'+sc1+'</li>';
         }
         var swapClass3 = state.adminMode ? " swappable" : "";
-        return '<li class="'+swapClass3.trim()+(selected?" swap-selected":"")+'"'+(state.adminMode?slotAttrs:'')+'>'+num+'<b>'+esc(m.name)+'</b><span class="sc">'+totalScore(m)+'점</span></li>';
+        var sc2 = state.showScores ? '<span class="sc">'+totalScore(m)+'점</span>' : '';
+        return '<li class="'+swapClass3.trim()+(selected?" swap-selected":"")+'"'+(state.adminMode?slotAttrs:'')+'>'+num+'<b>'+esc(m.name)+'</b>'+sc2+'</li>';
       }).join("");
       var color = team.color || TEAM_COLORS[i % TEAM_COLORS.length];
       var dotClass = state.adminMode ? "team-color-dot pickable" : "team-color-dot";
       var dotTitle = state.adminMode ? " title=\"클릭해서 팀 색상 변경\"" : "";
+      var totalHtml = state.showScores
+        ? totals[i]+'<small style="font-family:var(--font-body);font-size:12px;color:var(--text-3);"> 총합</small>'
+        : '<span class="score-hidden-label" style="font-size:16px;">비공개</span>';
       return '<div class="team-card" style="border-left-color:'+color+';">'
         + '<div class="team-card-head">'
         + '<div class="team-card-head-left">'
@@ -1376,12 +1457,12 @@
         + '<h3>'+team.name+'</h3>'
         + '</div>'
         + '</div>'
-        + '<div class="team-total mono">'+totals[i]+'<small style="font-family:var(--font-body);font-size:12px;color:var(--text-3);"> 총합</small></div>'
+        + '<div class="team-total mono">'+totalHtml+'</div>'
         + '<ul class="roster-mini">'+rosterHtml+'</ul>'
         + '</div>';
     }).join("");
 
-    wrap.innerHTML = noticeHtml + reshuffleHtml + swapHintHtml + '<div class="teams-out">'+cardsHtml+'</div>'
+    wrap.innerHTML = noticeHtml + controlsHtml + reshuffleHtml + swapHintHtml + '<div class="teams-out">'+cardsHtml+'</div>'
       + '<div style="margin-top:16px;text-align:right;"><button class="btn btn-primary" id="toMatchBtn">이 팀으로 매치 진행 →</button></div>';
 
     document.getElementById("toMatchBtn").addEventListener("click", function(){
@@ -1403,6 +1484,16 @@
         });
       });
     }
+    var showScoresSwitch = document.getElementById("showScoresSwitch");
+    function toggleShowScores(){
+      state.showScores = !state.showScores;
+      schedulePersist();
+      renderTeamsResult();
+    }
+    showScoresSwitch.addEventListener("click", toggleShowScores);
+    showScoresSwitch.addEventListener("keydown", function(e){
+      if(e.key === "Enter" || e.key === " "){ e.preventDefault(); toggleShowScores(); }
+    });
   }
 
   // tap-to-swap fine-tuning: first tap arms a slot, a second tap on a DIFFERENT team's slot swaps
@@ -1611,9 +1702,13 @@
     renderSquad(); // re-apply the withdrawn-member filter immediately (non-admins never see them)
     renderTeamsResult(); // re-apply admin-only controls (swap-to-fine-tune, color dots) immediately
   }
-  adminSwitch.addEventListener("click", function(){ setAdmin(!state.adminMode); });
+  function toggleAdmin(){
+    if(state.adminMode){ setAdmin(false); return; } // turning OFF never needs the PIN
+    openAdminPinPrompt();
+  }
+  adminSwitch.addEventListener("click", toggleAdmin);
   adminSwitch.addEventListener("keydown", function(e){
-    if(e.key === "Enter" || e.key === " "){ e.preventDefault(); setAdmin(!state.adminMode); }
+    if(e.key === "Enter" || e.key === " "){ e.preventDefault(); toggleAdmin(); }
   });
 
   document.getElementById("resetDemoBtn").addEventListener("click", function(){
@@ -1621,7 +1716,7 @@
     try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
     state = {
       members: seedMembers(), attendance:{}, teamCount:2, teamSize:5, teams:null, adminMode:false,
-      showPositions:true, squadView:"card", lastShortfall:0, guests:[], seedVersion:SEED_VERSION
+      showPositions:true, showScores:true, squadView:"card", lastShortfall:0, guests:[], seedVersion:SEED_VERSION
     };
     state.members.forEach(function(m){ state.attendance[m.id] = true; });
     schedulePersist();
