@@ -363,6 +363,46 @@
   @media (prefers-reduced-motion:reduce){ .clock.critical{ animation:none; } }
   @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.55;} }
 
+  /* admin-only quick clock correction (ref added/took off time, injury stoppage, etc.) */
+  .time-adjust-row{ display:flex; justify-content:center; gap:8px; margin:0 0 18px; flex-wrap:wrap; }
+  .time-adjust-row .btn{ padding:6px 13px; font-size:12.5px; }
+
+  /* ---------- Scoreboard ---------- */
+  .scoreboard{ margin:4px 0 22px; }
+  .score-row{ display:flex; align-items:center; justify-content:center; gap:16px; flex-wrap:wrap; }
+  .score-team{ display:flex; flex-direction:column; align-items:center; gap:8px; min-width:96px; }
+  .score-team-name{ font-family:var(--font-display); font-weight:700; font-size:14px; color:var(--text-2); }
+  .score-num{ font-family:var(--font-mono); font-size:48px; font-weight:800; line-height:1; }
+  .score-sep{ font-family:var(--font-mono); font-size:32px; color:var(--text-3); font-weight:700; }
+  .score-add-btn{
+    appearance:none; cursor:pointer; border-radius:7px; padding:5px 13px; font-weight:700; font-size:12.5px;
+    font-family:var(--font-body); color:var(--text-1); background:var(--bg-card); border:1px solid var(--line-strong);
+  }
+  .score-add-btn:hover{ background:var(--bg-card-hi); }
+
+  .scorer-picker{
+    background:var(--bg-card); border:1px solid var(--line-strong); border-radius:10px; padding:8px;
+    margin:14px auto 0; max-width:320px; display:flex; flex-direction:column; gap:2px; text-align:left;
+  }
+  .scorer-picker-title{ font-size:11.5px; color:var(--text-3); font-weight:700; letter-spacing:0.03em; padding:4px 10px 6px; }
+  .scorer-picker button{
+    appearance:none; text-align:left; border:none; background:transparent; color:var(--text-1);
+    padding:9px 10px; border-radius:7px; cursor:pointer; font-size:14px; font-weight:600; font-family:var(--font-body);
+  }
+  .scorer-picker button:hover{ background:rgba(255,255,255,0.05); }
+  .scorer-picker .cancel-pick{ color:var(--text-3); font-weight:600; text-align:center; margin-top:2px; }
+
+  .goal-log{ list-style:none; margin:16px auto 0; padding:0; max-width:380px; display:flex; flex-direction:column; }
+  .goal-log li{
+    display:flex; align-items:center; gap:9px; font-size:13px; color:var(--text-2);
+    padding:7px 4px; border-bottom:1px solid var(--line); text-align:left;
+  }
+  .goal-log li .goal-team-dot{ width:8px; height:8px; border-radius:50%; flex:none; }
+  .goal-log li .goal-who{ flex:1; color:var(--text-1); font-weight:600; }
+  .goal-log li .goal-time{ font-family:var(--font-mono); font-size:11.5px; color:var(--text-3); white-space:nowrap; }
+  .goal-log li .goal-remove{ background:none; border:none; color:var(--text-3); font-size:17px; cursor:pointer; padding:2px 4px; line-height:1; flex:none; }
+  .goal-log li .goal-remove:hover{ color:var(--critical); }
+  .goal-log-empty{ text-align:center; color:var(--text-3); font-size:13px; margin:14px 0 0; }
 
   .alert-banner{
     display:none; align-items:center; justify-content:center; gap:10px; margin:0 auto 18px; max-width:480px;
@@ -400,6 +440,16 @@
   body.public-mode .quarter-label{ font-size:22px; }
   body.public-mode .alert-banner{ font-size:28px; padding:18px 30px; }
   body.public-mode .live-controls .btn:not(.exit-public){ display:none; }
+  /* public/projector screen: score stays big and visible, but every editing control (time nudge,
+     +1 득점, scorer picker, record delete) is for the admin's own device only */
+  body.public-mode .time-adjust-row,
+  body.public-mode .score-add-btn,
+  body.public-mode .scorer-picker,
+  body.public-mode .goal-remove{ display:none !important; }
+  body.public-mode .score-num{ font-size:min(16vw,150px); }
+  body.public-mode .score-team-name{ font-size:20px; }
+  body.public-mode .goal-log{ max-width:560px; font-size:16px; }
+  body.public-mode .goal-log li{ padding:10px 6px; }
 
   footer{ text-align:center; color:var(--text-3); font-size:12px; padding:30px 16px 10px; }
 </style>
@@ -543,6 +593,9 @@
       <div class="match-live" id="matchLive" style="display:none;">
         <div class="quarter-label" id="quarterLabel">1쿼터 / 2쿼터</div>
         <div class="clock mono" id="clockDisplay">15:00</div>
+        <div class="time-adjust-row" id="timeAdjustRow"></div>
+
+        <div class="scoreboard" id="scoreboard"></div>
 
         <div class="alert-banner" id="alertBanner"></div>
 
@@ -649,6 +702,7 @@
     teamCount: 2,
     teamSize: 5,
     teams: null,      // array of {name, memberIds}
+    matchScore: null, // { scores:[...], goals:[{teamIdx,memberId,name,quarterIdx,display}] } while a match is live
     adminMode: false,
     showPositions: true,
     showScores: true,
@@ -1369,6 +1423,8 @@
 
     state.teams = teams;
     state.lastShortfall = shortfall;
+    state.matchScore = null; // new team layout — any previous match's score no longer applies to it
+    scorerPickerTeamIdx = null;
     schedulePersist();
     renderTeamsResult();
     renderMatchSetup();
@@ -1540,6 +1596,8 @@
     document.getElementById("matchReady").style.display = hasTeams ? "block" : "none";
     if(!hasTeams) return;
     renderRostersStrip();
+    renderTimeAdjustRow();
+    renderScoreboard();
   }
 
   function renderRostersStrip(){
@@ -1559,6 +1617,149 @@
   function fmtClock(sec){
     var m = Math.floor(sec/60), s = sec%60;
     return (m<10?"0":"")+m+":"+(s<10?"0":"")+s;
+  }
+
+  // admin-only quick clock correction — e.g. the ref added stoppage time, or a quarter needs to be
+  // cut short. Only touches this device's own locally-running clock (the live match timer, like the
+  // rest of the match-day clock, is not synced across devices — see the architecture notes above the
+  // Firestore setup).
+  function renderTimeAdjustRow(){
+    var el = document.getElementById("timeAdjustRow");
+    if(!el) return;
+    el.innerHTML = state.adminMode
+      ? '<button class="btn btn-sm" type="button" data-adj="-60">-1분</button>'
+        + '<button class="btn btn-sm" type="button" data-adj="-30">-30초</button>'
+        + '<button class="btn btn-sm" type="button" data-adj="30">+30초</button>'
+        + '<button class="btn btn-sm" type="button" data-adj="60">+1분</button>'
+      : '';
+    el.querySelectorAll("button[data-adj]").forEach(function(btn){
+      btn.addEventListener("click", function(){ adjustTime(parseInt(btn.getAttribute("data-adj"), 10)); });
+    });
+  }
+
+  function adjustTime(deltaSeconds){
+    if(!state.adminMode) return;
+    timer.remaining = Math.max(0, timer.remaining + deltaSeconds);
+    var clockEl = document.getElementById("clockDisplay");
+    if(clockEl){
+      clockEl.textContent = fmtClock(timer.remaining);
+      clockEl.className = "clock mono" + (timer.remaining <= 120 ? " critical" : (timer.remaining <= 300 ? " warn" : ""));
+    }
+    // if time was added back past a threshold already warned about, let that warning fire again
+    if(timer.remaining > 5*60) timer.alertsFired.five = false;
+    if(timer.remaining > 2*60) timer.alertsFired.two = false;
+    if(timer.remaining > 0) timer.alertsFired.last = false;
+  }
+
+  /* ---------------- Scoreboard ---------------- */
+  // state.matchScore is shared (Firestore-synced) like the rest of state, so the live score and goal
+  // log are visible on every device that has this match-day screen open, including a 공용 화면
+  // projector — unlike the clock itself, which is local to whichever device started the match.
+  var scorerPickerTeamIdx = null; // which team's "+1 득점" scorer picker is open (local UI only)
+
+  function teamRealMembers(team){
+    return team.memberIds
+      .filter(function(id){ return !isReserve(id); })
+      .map(memberById)
+      .filter(Boolean);
+  }
+
+  function renderScoreboard(){
+    var el = document.getElementById("scoreboard");
+    if(!el) return;
+    if(!state.teams || !state.matchScore){ el.innerHTML = ""; return; }
+    var ms = state.matchScore;
+
+    var scoreRowHtml = '<div class="score-row">' + state.teams.map(function(team, i){
+      var color = team.color || TEAM_COLORS[i % TEAM_COLORS.length];
+      var addBtn = state.adminMode
+        ? '<button class="score-add-btn" type="button" data-team-idx="'+i+'" style="border-color:'+color+';">+1 득점</button>'
+        : '';
+      var sep = i < state.teams.length - 1 ? '<span class="score-sep">:</span>' : '';
+      return '<div class="score-team">'
+        + '<span class="score-team-name">'+esc(team.name)+'</span>'
+        + '<span class="score-num" style="color:'+color+';">'+(ms.scores[i]||0)+'</span>'
+        + addBtn
+        + '</div>' + sep;
+    }).join("") + '</div>';
+
+    var pickerHtml = "";
+    if(state.adminMode && scorerPickerTeamIdx !== null && state.teams[scorerPickerTeamIdx]){
+      var pickTeam = state.teams[scorerPickerTeamIdx];
+      var members = teamRealMembers(pickTeam);
+      pickerHtml = '<div class="scorer-picker">'
+        + '<div class="scorer-picker-title">'+esc(pickTeam.name)+' 득점자 선택</div>'
+        + members.map(function(m){ return '<button type="button" data-scorer-id="'+m.id+'">'+esc(m.name)+'</button>'; }).join("")
+        + '<button type="button" data-scorer-id="">득점자 미상</button>'
+        + '<button type="button" class="cancel-pick" data-cancel-pick="1">취소</button>'
+        + '</div>';
+    }
+
+    var goalLogHtml = ms.goals.length
+      ? '<ul class="goal-log">' + ms.goals.map(function(g, gi){
+          var gTeam = state.teams[g.teamIdx];
+          var color = (gTeam && gTeam.color) || TEAM_COLORS[g.teamIdx % TEAM_COLORS.length];
+          var who = g.name ? esc(g.name) : "득점자 미상";
+          var removeBtn = state.adminMode
+            ? '<button class="goal-remove" type="button" data-goal-idx="'+gi+'" aria-label="기록 삭제" title="기록 삭제">×</button>'
+            : '';
+          return '<li><span class="goal-team-dot" style="background:'+color+';"></span>'
+            + '<span class="goal-who">'+who+'</span>'
+            + '<span class="goal-time">'+(gTeam?esc(gTeam.name):'')+' · '+esc(g.display)+'</span>'
+            + removeBtn + '</li>';
+        }).join("") + '</ul>'
+      : '<div class="goal-log-empty">아직 득점 기록이 없습니다.</div>';
+
+    el.innerHTML = scoreRowHtml + pickerHtml + goalLogHtml;
+
+    if(state.adminMode){
+      el.querySelectorAll(".score-add-btn").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var idx = parseInt(btn.getAttribute("data-team-idx"), 10);
+          scorerPickerTeamIdx = (scorerPickerTeamIdx === idx) ? null : idx;
+          renderScoreboard();
+        });
+      });
+      el.querySelectorAll(".scorer-picker button[data-scorer-id]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var id = btn.getAttribute("data-scorer-id");
+          var scorer = id ? memberById(id) : null;
+          addGoal(scorerPickerTeamIdx, id || null, scorer ? scorer.name : "");
+        });
+      });
+      var cancelBtn = el.querySelector("[data-cancel-pick]");
+      if(cancelBtn){
+        cancelBtn.addEventListener("click", function(){ scorerPickerTeamIdx = null; renderScoreboard(); });
+      }
+      el.querySelectorAll(".goal-remove").forEach(function(btn){
+        btn.addEventListener("click", function(){ removeGoal(parseInt(btn.getAttribute("data-goal-idx"), 10)); });
+      });
+    }
+  }
+
+  function addGoal(teamIdx, memberId, name){
+    if(!state.adminMode || !state.matchScore || !state.teams || !state.teams[teamIdx]) return;
+    state.matchScore.scores[teamIdx] = (state.matchScore.scores[teamIdx] || 0) + 1;
+    state.matchScore.goals.push({
+      teamIdx: teamIdx,
+      memberId: memberId || null,
+      name: name || "",
+      quarterIdx: timer.quarterIdx,
+      display: (timer.quarterIdx + 1) + "쿼터 " + fmtClock(Math.max(timer.remaining, 0))
+    });
+    scorerPickerTeamIdx = null;
+    schedulePersist();
+    renderScoreboard();
+  }
+
+  function removeGoal(goalIdx){
+    if(!state.adminMode || !state.matchScore) return;
+    var g = state.matchScore.goals[goalIdx];
+    if(!g) return;
+    state.matchScore.goals.splice(goalIdx, 1);
+    state.matchScore.scores[g.teamIdx] = Math.max(0, (state.matchScore.scores[g.teamIdx] || 0) - 1);
+    schedulePersist();
+    renderScoreboard();
   }
 
   var audioCtx = null;
@@ -1640,7 +1841,13 @@
     timer.quarterIdx = 0;
     document.getElementById("matchLive").style.display = "block";
     document.getElementById("startMatchBtn").style.display = "none";
+    // fresh scoreboard for this match (shared, so every device/screen on this link sees the same score)
+    state.matchScore = { scores: state.teams.map(function(){ return 0; }), goals: [] };
+    scorerPickerTeamIdx = null;
+    schedulePersist();
     startQuarter();
+    renderTimeAdjustRow();
+    renderScoreboard();
     timer.intervalId = window.setInterval(tick, 1000);
     timer.running = true;
   });
@@ -1660,6 +1867,7 @@
   document.getElementById("endMatchBtn").addEventListener("click", function(){
     window.clearInterval(timer.intervalId);
     timer.running = false;
+    scorerPickerTeamIdx = null;
     document.getElementById("matchLive").style.display = "none";
     document.getElementById("startMatchBtn").style.display = "inline-block";
     document.body.classList.remove("public-mode");
@@ -1701,6 +1909,8 @@
     renderSquadAdminTools();
     renderSquad(); // re-apply the withdrawn-member filter immediately (non-admins never see them)
     renderTeamsResult(); // re-apply admin-only controls (swap-to-fine-tune, color dots) immediately
+    renderTimeAdjustRow(); // show/hide the clock nudge buttons immediately
+    renderScoreboard(); // show/hide +1 득점 / 기록 삭제 immediately
   }
   function toggleAdmin(){
     if(state.adminMode){ setAdmin(false); return; } // turning OFF never needs the PIN
@@ -1715,7 +1925,7 @@
     if(!confirm("데모 데이터를 초기 상태로 되돌릴까요? 저장된 능력치·팀 편성이 모두 초기화됩니다.")) return;
     try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
     state = {
-      members: seedMembers(), attendance:{}, teamCount:2, teamSize:5, teams:null, adminMode:false,
+      members: seedMembers(), attendance:{}, teamCount:2, teamSize:5, teams:null, matchScore:null, adminMode:false,
       showPositions:true, showScores:true, squadView:"card", lastShortfall:0, guests:[], seedVersion:SEED_VERSION
     };
     state.members.forEach(function(m){ state.attendance[m.id] = true; });
