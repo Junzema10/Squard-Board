@@ -428,6 +428,10 @@
   }
   .history-card-head{ display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:10px; }
   .history-date{ font-family:var(--font-display); font-weight:700; font-size:15px; color:var(--text-1); }
+  .history-early-tag{
+    display:inline-block; font-size:11px; font-weight:700; color:var(--warn); background:var(--warn-soft);
+    border:1px solid var(--warn); border-radius:999px; padding:2px 9px; margin-left:6px; vertical-align:middle;
+  }
   .history-rounds{ font-size:12.5px; color:var(--text-3); font-weight:600; }
   .history-score-row{ display:flex; align-items:center; justify-content:center; gap:14px; margin:10px 0 4px; flex-wrap:wrap; }
   .history-score-team{ display:flex; flex-direction:column; align-items:center; gap:4px; min-width:84px; }
@@ -470,21 +474,28 @@
   }
   body.public-mode .clock{ font-size:min(26vw,300px); }
   body.public-mode .quarter-label{ font-size:22px; }
+  /* public mode has room to spare, so stack the pause button above the quarter label instead of
+     squeezing them into the same row — avoids the label getting clipped on a narrow screen */
+  body.public-mode .live-header-row{ grid-template-columns:1fr; justify-items:center; gap:10px; }
+  body.public-mode .live-header-row .quarter-label{ text-align:center; white-space:normal; }
+  body.public-mode .live-header-row > div:first-child{ display:none; }
   body.public-mode .alert-banner{ font-size:28px; padding:18px 30px; }
-  body.public-mode .live-controls .btn:not(.exit-public){ display:none; }
-  /* public/projector screen: score stays big and visible, but every editing control (time nudge,
-     +1 득점, scorer picker, record delete) is for the admin's own device only */
-  body.public-mode .time-adjust-row,
-  body.public-mode #pauseBtn,
-  body.public-mode .score-add-btn,
-  body.public-mode .scorer-picker,
-  body.public-mode .goal-remove{ display:none !important; }
+  /* public/projector screen is still the admin's own device — the same person runs the match
+     from it, so every control (time nudge, pause/resume, +1 득점, scorer picker, record delete,
+     매치 종료) stays live here, just sized up a bit for a screen people are reading from farther
+     away. Only the nav/tabs and setup form are hidden, to keep the presentation clean. */
+  body.public-mode .time-adjust-row .btn{ padding:9px 18px; font-size:15px; }
+  body.public-mode #pauseBtn{ font-size:15px; padding:9px 18px; }
+  body.public-mode .live-controls .btn{ font-size:15px; padding:10px 20px; }
+  body.public-mode .score-add-btn{ font-size:14px; padding:7px 16px; }
   body.public-mode .score-num{ font-size:min(16vw,150px); }
   body.public-mode .score-team-name{ font-size:20px; }
   body.public-mode .goal-log-columns{ max-width:900px; gap:32px; }
   body.public-mode .goal-log-col{ max-width:380px; font-size:16px; }
   body.public-mode .goal-log-col-name{ font-size:16px; }
   body.public-mode .goal-log li{ padding:10px 6px; }
+  body.public-mode .scorer-picker{ max-width:420px; font-size:15px; }
+  body.public-mode .scorer-picker button{ padding:12px 14px; font-size:16px; }
 
   footer{ text-align:center; color:var(--text-3); font-size:12px; padding:30px 16px 10px; }
 </style>
@@ -745,7 +756,17 @@
   // (e.g. the old placeholder names) is auto-refreshed to the current one instead of staying stale
   var SEED_VERSION = 2;
 
-  var seeded = EMBEDDED_STATE || loadState();
+  // IMPORTANT: prefer this browser's own saved copy over the embedded demo seed below.
+  // EMBEDDED_STATE is just a cold-start placeholder baked into this file (fake demo roster) —
+  // the real source of truth is Firestore, which overwrites `state` again within moments of load
+  // via onSnapshot once Firebase connects. But when Firebase fails to load/connect on a given
+  // device/network (shows as "Firebase 연결 실패 · 이 기기에만 저장됨" in the save-status pill),
+  // onSnapshot never fires, and this device falls back to localStorage-only persistence. If
+  // EMBEDDED_STATE were checked first, every reload on that device would silently throw away
+  // whatever was saved locally (new members, match history, etc.) and reset back to the demo
+  // seed — which is exactly what made 경기 기록 (and anything else) look like it "didn't save"
+  // after a page reload on a device where Firebase can't connect.
+  var seeded = loadState() || EMBEDDED_STATE;
   var state = seeded || {
     members: seedMembers(),
     attendance: {},   // id -> bool
@@ -1858,13 +1879,18 @@
     // means every match played that day, not just the ones with goals
     if(!state.matchScore || !state.teams || !state.teams.length) return;
     var ms = state.matchScore;
+    // if 매치 종료 is pressed early (time still left on the clock), only count the quarters that
+    // were actually reached — not the originally planned total — so "쿼터 N판" on the dashboard
+    // reflects what was really played, not what was scheduled
+    var quartersPlayed = Math.min(timer.quarterIdx + 1, timer.quarterCount);
     state.matchHistory.unshift({
       id: "match_" + Date.now(),
       endedAt: Date.now(),
       dateLabel: formatDateLabel(new Date()),
       teamNames: state.teams.map(function(t){ return t.name; }),
       teamColors: state.teams.map(function(t, i){ return t.color || TEAM_COLORS[i % TEAM_COLORS.length]; }),
-      quarterCount: timer.quarterCount,
+      quarterCount: quartersPlayed,
+      endedEarly: timer.remaining > 0,
       scores: ms.scores.slice(),
       goals: ms.goals.map(function(g){ return { teamIdx:g.teamIdx, memberId:g.memberId, name:g.name, quarterIdx:g.quarterIdx, display:g.display }; })
     });
@@ -1891,8 +1917,9 @@
           + '</div>' + sep;
       }).join("") + '</div>';
       var goalLog = goalLogColumnsHtml(teamsForLog, h.goals, false);
+      var earlyTag = h.endedEarly ? ' <span class="history-early-tag">조기 종료</span>' : '';
       return '<div class="history-card">'
-        + '<div class="history-card-head"><span class="history-date">'+esc(h.dateLabel)+'</span><span class="history-rounds">쿼터 '+h.quarterCount+'판 · '+roundsLabel+'</span></div>'
+        + '<div class="history-card-head"><span class="history-date">'+esc(h.dateLabel)+earlyTag+'</span><span class="history-rounds">쿼터 '+h.quarterCount+'판 · '+roundsLabel+'</span></div>'
         + scoreRowHtml + goalLog
         + '</div>';
     }).join("");
@@ -2157,4 +2184,4 @@
 })();
 </script>
 </body>
-    </html>
+  </html>
