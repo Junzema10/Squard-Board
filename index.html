@@ -392,7 +392,11 @@
   .scorer-picker button:hover{ background:rgba(255,255,255,0.05); }
   .scorer-picker .cancel-pick{ color:var(--text-3); font-weight:600; text-align:center; margin-top:2px; }
 
-  .goal-log{ list-style:none; margin:16px auto 0; padding:0; max-width:380px; display:flex; flex-direction:column; }
+  /* side-by-side (좌우 대칭) per-team goal columns, mirroring the score-row layout above it */
+  .goal-log-columns{ display:flex; justify-content:center; align-items:flex-start; gap:18px; margin:16px auto 0; max-width:680px; flex-wrap:wrap; }
+  .goal-log-col{ flex:1 1 260px; min-width:200px; max-width:320px; }
+  .goal-log-col-name{ font-family:var(--font-display); font-weight:700; font-size:13px; color:var(--text-2); text-align:center; margin-bottom:6px; }
+  .goal-log{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; }
   .goal-log li{
     display:flex; align-items:center; gap:9px; font-size:13px; color:var(--text-2);
     padding:7px 4px; border-bottom:1px solid var(--line); text-align:left;
@@ -403,6 +407,20 @@
   .goal-log li .goal-remove{ background:none; border:none; color:var(--text-3); font-size:17px; cursor:pointer; padding:2px 4px; line-height:1; flex:none; }
   .goal-log li .goal-remove:hover{ color:var(--critical); }
   .goal-log-empty{ text-align:center; color:var(--text-3); font-size:13px; margin:14px 0 0; }
+
+  /* ---------- Match history dashboard ---------- */
+  .history-card{
+    background:var(--bg-card); border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin-bottom:16px;
+  }
+  .history-card-head{ display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:10px; }
+  .history-date{ font-family:var(--font-display); font-weight:700; font-size:15px; color:var(--text-1); }
+  .history-rounds{ font-size:12.5px; color:var(--text-3); font-weight:600; }
+  .history-score-row{ display:flex; align-items:center; justify-content:center; gap:14px; margin:10px 0 4px; flex-wrap:wrap; }
+  .history-score-team{ display:flex; flex-direction:column; align-items:center; gap:4px; min-width:84px; }
+  .history-score-team-name{ font-size:13px; font-weight:700; color:var(--text-2); }
+  .history-score-num{ font-family:var(--font-mono); font-size:30px; font-weight:800; line-height:1; }
+  .history-score-sep{ font-family:var(--font-mono); font-size:22px; color:var(--text-3); font-weight:700; }
+  .history-empty{ text-align:center; color:var(--text-3); font-size:13px; margin:30px 0; }
 
   .alert-banner{
     display:none; align-items:center; justify-content:center; gap:10px; margin:0 auto 18px; max-width:480px;
@@ -448,7 +466,9 @@
   body.public-mode .goal-remove{ display:none !important; }
   body.public-mode .score-num{ font-size:min(16vw,150px); }
   body.public-mode .score-team-name{ font-size:20px; }
-  body.public-mode .goal-log{ max-width:560px; font-size:16px; }
+  body.public-mode .goal-log-columns{ max-width:900px; gap:32px; }
+  body.public-mode .goal-log-col{ max-width:380px; font-size:16px; }
+  body.public-mode .goal-log-col-name{ font-size:16px; }
   body.public-mode .goal-log li{ padding:10px 6px; }
 
   footer{ text-align:center; color:var(--text-3); font-size:12px; padding:30px 16px 10px; }
@@ -466,6 +486,7 @@
       <button class="tab" role="tab" aria-selected="true" data-panel="squad">스쿼드</button>
       <button class="tab" role="tab" aria-selected="false" data-panel="builder">팀 편성</button>
       <button class="tab" role="tab" aria-selected="false" data-panel="match">매치 데이</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="history">경기 기록</button>
     </nav>
     <div class="topbar-actions">
       <div class="admin-toggle">
@@ -611,6 +632,17 @@
     </div>
   </section>
 
+  <section class="panel" id="panel-history">
+    <div class="section-head">
+      <div>
+        <p class="eyebrow">Match History</p>
+        <h2>경기 기록</h2>
+        <p>종료된 매치의 날짜, 스코어, 득점자, 쿼터별 승리 현황을 확인할 수 있습니다.</p>
+      </div>
+    </div>
+    <div id="matchHistoryList"></div>
+  </section>
+
 </div>
 
 <footer>SQUADBOARD 데모 · 이 링크를 여는 모든 기기에 같은 데이터가 공유·저장됩니다</footer>
@@ -703,6 +735,7 @@
     teamSize: 5,
     teams: null,      // array of {name, memberIds}
     matchScore: null, // { scores:[...], goals:[{teamIdx,memberId,name,quarterIdx,display}] } while a match is live
+    matchHistory: [], // archived past matches: { id, endedAt, dateLabel, teamNames, teamColors, quarterCount, scores, goals }
     adminMode: false,
     showPositions: true,
     showScores: true,
@@ -728,6 +761,7 @@
   }
   if(typeof state.showPositions !== "boolean") state.showPositions = true;
   if(typeof state.showScores !== "boolean") state.showScores = true;
+  if(!Array.isArray(state.matchHistory)) state.matchHistory = [];
   if(state.squadView !== "card" && state.squadView !== "list") state.squadView = "card";
   if(!state.guests) state.guests = [];
   // backfill for state saved before member status (active/withdrawn) existed
@@ -1648,6 +1682,7 @@
     // if time was added back past a threshold already warned about, let that warning fire again
     if(timer.remaining > 5*60) timer.alertsFired.five = false;
     if(timer.remaining > 2*60) timer.alertsFired.two = false;
+    if(timer.remaining > 60) timer.alertsFired.one = false;
     if(timer.remaining > 0) timer.alertsFired.last = false;
   }
 
@@ -1662,6 +1697,33 @@
       .filter(function(id){ return !isReserve(id); })
       .map(memberById)
       .filter(Boolean);
+  }
+
+  // builds the per-team goal columns, laid out side by side (좌우 대칭) so each team's scorers
+  // sit under that team's own side instead of one shared chronological list. `goals` keeps its
+  // original array indices in data-goal-idx so the remove button still targets the right record.
+  function goalLogColumnsHtml(teams, goals, editable){
+    if(!teams || !teams.length) return '<div class="goal-log-empty">아직 득점 기록이 없습니다.</div>';
+    var cols = teams.map(function(team, ti){
+      var color = team.color || TEAM_COLORS[ti % TEAM_COLORS.length];
+      var teamGoals = [];
+      (goals||[]).forEach(function(g, gi){ if(g.teamIdx === ti) teamGoals.push({ g:g, gi:gi }); });
+      var listHtml = teamGoals.length
+        ? '<ul class="goal-log">' + teamGoals.map(function(item){
+            var g = item.g, gi = item.gi;
+            var who = g.name ? esc(g.name) : "득점자 미상";
+            var removeBtn = editable
+              ? '<button class="goal-remove" type="button" data-goal-idx="'+gi+'" aria-label="기록 삭제" title="기록 삭제">×</button>'
+              : '';
+            return '<li><span class="goal-team-dot" style="background:'+color+';"></span>'
+              + '<span class="goal-who">'+who+'</span>'
+              + '<span class="goal-time">'+esc(g.display)+'</span>'
+              + removeBtn + '</li>';
+          }).join("") + '</ul>'
+        : '<div class="goal-log-empty">득점 없음</div>';
+      return '<div class="goal-log-col"><div class="goal-log-col-name" style="color:'+color+';">'+esc(team.name)+'</div>' + listHtml + '</div>';
+    }).join("");
+    return '<div class="goal-log-columns">' + cols + '</div>';
   }
 
   function renderScoreboard(){
@@ -1695,20 +1757,7 @@
         + '</div>';
     }
 
-    var goalLogHtml = ms.goals.length
-      ? '<ul class="goal-log">' + ms.goals.map(function(g, gi){
-          var gTeam = state.teams[g.teamIdx];
-          var color = (gTeam && gTeam.color) || TEAM_COLORS[g.teamIdx % TEAM_COLORS.length];
-          var who = g.name ? esc(g.name) : "득점자 미상";
-          var removeBtn = state.adminMode
-            ? '<button class="goal-remove" type="button" data-goal-idx="'+gi+'" aria-label="기록 삭제" title="기록 삭제">×</button>'
-            : '';
-          return '<li><span class="goal-team-dot" style="background:'+color+';"></span>'
-            + '<span class="goal-who">'+who+'</span>'
-            + '<span class="goal-time">'+(gTeam?esc(gTeam.name):'')+' · '+esc(g.display)+'</span>'
-            + removeBtn + '</li>';
-        }).join("") + '</ul>'
-      : '<div class="goal-log-empty">아직 득점 기록이 없습니다.</div>';
+    var goalLogHtml = goalLogColumnsHtml(state.teams, ms.goals, state.adminMode);
 
     el.innerHTML = scoreRowHtml + pickerHtml + goalLogHtml;
 
@@ -1762,6 +1811,75 @@
     renderScoreboard();
   }
 
+  /* ---------------- Match history dashboard ---------------- */
+  // 쿼터(라운드)별로 더 많이 득점한 팀이 그 라운드를 "승리"한 것으로 집계 — 득점이 없거나
+  // 동점인 라운드는 어느 팀에게도 승리를 주지 않음
+  function computeRoundWins(teamCount, goals, quarterCount){
+    var wins = new Array(teamCount).fill(0);
+    for(var q=0; q<quarterCount; q++){
+      var tally = new Array(teamCount).fill(0);
+      (goals||[]).forEach(function(g){ if(g.quarterIdx === q && g.teamIdx < teamCount) tally[g.teamIdx]++; });
+      var max = Math.max.apply(null, tally);
+      if(max > 0 && tally.indexOf(max) === tally.lastIndexOf(max)){
+        wins[tally.indexOf(max)]++;
+      }
+    }
+    return wins;
+  }
+
+  function formatDateLabel(d){
+    var days = ["일","월","화","수","목","금","토"];
+    var pad = function(n){ return (n<10?"0":"")+n; };
+    return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+" ("+days[d.getDay()]+") "+pad(d.getHours())+":"+pad(d.getMinutes());
+  }
+
+  // archives the just-finished match's scoreboard into state.matchHistory so it survives past the
+  // next "매치 시작" (which overwrites state.matchScore with a fresh 0:0 board)
+  function archiveCurrentMatch(){
+    if(!state.matchScore || !state.teams || !state.teams.length) return;
+    var ms = state.matchScore;
+    var hasAnyScore = ms.goals.length > 0 || ms.scores.some(function(s){ return s > 0; });
+    if(!hasAnyScore) return; // nothing happened (e.g. match started then immediately ended) — skip
+    state.matchHistory.unshift({
+      id: "match_" + Date.now(),
+      endedAt: Date.now(),
+      dateLabel: formatDateLabel(new Date()),
+      teamNames: state.teams.map(function(t){ return t.name; }),
+      teamColors: state.teams.map(function(t, i){ return t.color || TEAM_COLORS[i % TEAM_COLORS.length]; }),
+      quarterCount: timer.quarterCount,
+      scores: ms.scores.slice(),
+      goals: ms.goals.map(function(g){ return { teamIdx:g.teamIdx, memberId:g.memberId, name:g.name, quarterIdx:g.quarterIdx, display:g.display }; })
+    });
+    // cap history length so the saved document doesn't grow unbounded
+    if(state.matchHistory.length > 50) state.matchHistory.length = 50;
+  }
+
+  function renderMatchHistory(){
+    var el = document.getElementById("matchHistoryList");
+    if(!el) return;
+    if(!state.matchHistory.length){
+      el.innerHTML = '<div class="history-empty">아직 종료된 매치 기록이 없습니다. 매치를 진행하고 "매치 종료"를 누르면 여기에 기록됩니다.</div>';
+      return;
+    }
+    el.innerHTML = state.matchHistory.map(function(h){
+      var teamsForLog = h.teamNames.map(function(name, i){ return { name:name, color:h.teamColors[i] }; });
+      var wins = computeRoundWins(h.teamNames.length, h.goals, h.quarterCount);
+      var roundsLabel = h.teamNames.map(function(name, i){ return esc(name)+" "+(wins[i]||0)+"승"; }).join(" · ");
+      var scoreRowHtml = '<div class="history-score-row">' + h.teamNames.map(function(name, i){
+        var sep = i < h.teamNames.length - 1 ? '<span class="history-score-sep">:</span>' : '';
+        return '<div class="history-score-team">'
+          + '<span class="history-score-team-name">'+esc(name)+'</span>'
+          + '<span class="history-score-num" style="color:'+h.teamColors[i]+';">'+(h.scores[i]||0)+'</span>'
+          + '</div>' + sep;
+      }).join("") + '</div>';
+      var goalLog = goalLogColumnsHtml(teamsForLog, h.goals, false);
+      return '<div class="history-card">'
+        + '<div class="history-card-head"><span class="history-date">'+esc(h.dateLabel)+'</span><span class="history-rounds">쿼터 '+h.quarterCount+'판 · '+roundsLabel+'</span></div>'
+        + scoreRowHtml + goalLog
+        + '</div>';
+    }).join("");
+  }
+
   var audioCtx = null;
   function beep(freq, dur){
     try{
@@ -1787,6 +1905,28 @@
     showAlert._t = setTimeout(function(){ banner.classList.remove("show"); }, 4200);
   }
 
+  // speech-synthesis voice alert ("1분!") — best-effort, silently does nothing on browsers/devices
+  // without speechSynthesis (e.g. some older webviews); the visual banner + beep always still fire
+  function speak(text){
+    try{
+      if(!window.speechSynthesis) return;
+      window.speechSynthesis.cancel(); // don't let overlapping utterances queue up and lag behind
+      var u = new SpeechSynthesisUtterance(text);
+      u.lang = "ko-KR";
+      u.rate = 1;
+      u.volume = 1;
+      window.speechSynthesis.speak(u);
+    }catch(e){ /* voice not available — visual + beep alert still cover it */ }
+  }
+
+  // a longer, distinct triple-beep "경기 종료" buzzer so the quarter-end sound is clearly
+  // different from the single warn/critical beeps used for the 5분/2분/1분 reminders
+  function playEndSignal(){
+    beep(880, 0.22);
+    setTimeout(function(){ beep(880, 0.22); }, 320);
+    setTimeout(function(){ beep(880, 0.55); }, 640);
+  }
+
   function tick(){
     timer.remaining -= 1;
     var clockEl = document.getElementById("clockDisplay");
@@ -1801,9 +1941,15 @@
       timer.alertsFired.two = true;
       showAlert("잔여 시간 2분", "warn");
     }
+    if(!timer.alertsFired.one && timer.remaining <= 60){
+      timer.alertsFired.one = true;
+      showAlert("잔여 시간 1분!", "critical");
+      speak("1분 남았습니다");
+    }
     if(!timer.alertsFired.last && timer.remaining <= 0){
       timer.alertsFired.last = true;
       showAlert("막공! 쿼터 종료", "critical");
+      playEndSignal();
       nextQuarterOrEnd();
     }
   }
@@ -1868,6 +2014,9 @@
     window.clearInterval(timer.intervalId);
     timer.running = false;
     scorerPickerTeamIdx = null;
+    archiveCurrentMatch();
+    schedulePersist();
+    renderMatchHistory();
     document.getElementById("matchLive").style.display = "none";
     document.getElementById("startMatchBtn").style.display = "inline-block";
     document.body.classList.remove("public-mode");
@@ -1925,7 +2074,7 @@
     if(!confirm("데모 데이터를 초기 상태로 되돌릴까요? 저장된 능력치·팀 편성이 모두 초기화됩니다.")) return;
     try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
     state = {
-      members: seedMembers(), attendance:{}, teamCount:2, teamSize:5, teams:null, matchScore:null, adminMode:false,
+      members: seedMembers(), attendance:{}, teamCount:2, teamSize:5, teams:null, matchScore:null, matchHistory:[], adminMode:false,
       showPositions:true, showScores:true, squadView:"card", lastShortfall:0, guests:[], seedVersion:SEED_VERSION
     };
     state.members.forEach(function(m){ state.attendance[m.id] = true; });
@@ -1951,6 +2100,7 @@
     renderAttendList();
     renderTeamsResult();
     renderMatchSetup();
+    renderMatchHistory();
   }
 
   renderAll();
